@@ -265,6 +265,9 @@ ST_FUNC int tccgen_compile(TCCState *s1)
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
 #endif
+#ifdef TCC_TARGET_WASM
+    wasm_init();
+#endif
 
 #ifdef INC_DEBUG
     printf("%s: **** new file\n", file->filename);
@@ -277,6 +280,9 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     check_vstack();
     /* end of translation unit info */
     tcc_debug_end(s1);
+#ifdef TCC_TARGET_WASM
+    wasm_end();
+#endif
     return 0;
 }
 
@@ -5405,7 +5411,7 @@ static void expr_land(void)
 	    } else {
 		if (!t)
 		  save_regs(1);
-		t = gvtst(1, t);
+		t = gvtst(1, t | BLOCK_VT_JMPI);
 	    }
 	    if (tok != TOK_LAND) {
 		if (t)
@@ -5446,7 +5452,7 @@ static void expr_lor(void)
 	    } else {
 		if (!t)
 		  save_regs(1);
-		t = gvtst(0, t);
+		t = gvtst(0, t | BLOCK_VT_JMP);
 	    }
 	    if (tok != TOK_LOR) {
 		if (t)
@@ -5899,7 +5905,7 @@ static void block(int *bsym, int *csym, int is_expr)
         if (cond == 1)
             a = 0, vpop();
         else
-            a = gvtst(1, 0);
+            a = gvtst(0, BLOCK_IF);
         if (cond == 0)
 	    nocode_wanted |= 0x20000000;
         block(bsym, csym, 0);
@@ -5908,35 +5914,31 @@ static void block(int *bsym, int *csym, int is_expr)
         c = tok;
         if (c == TOK_ELSE) {
             next();
-            d = gjmp(0);
-            gsym(a);
+            gsym(a | BLOCK_IF_ELSE);
 	    if (cond == 1)
 	        nocode_wanted |= 0x20000000;
             block(bsym, csym, 0);
-            gsym(d); /* patch else jmp */
 	    if (cond != 0)
 		nocode_wanted = saved_nocode_wanted;
-        } else
-            gsym(a);
+        }
+        gsym(a);
     } else if (tok == TOK_WHILE) {
 	int saved_nocode_wanted;
 	nocode_wanted &= ~0x20000000;
         next();
-        d = ind;
+        a = gblock(BLOCK_LOOP);
         vla_sp_restore();
         skip('(');
         gexpr();
         skip(')');
-        a = gvtst(1, 0);
-        b = 0;
+        gvtst(1, a);
+        b = a | BLOCK_LOOP_CONTINUE;
         ++local_scope;
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
         --local_scope;
-        gjmp_addr(d);
         gsym(a);
-        gsym_addr(b, d);
     } else if (tok == '{') {
         Sym *llabel;
         int block_vla_sp_loc = vla_sp_loc, saved_vlas_in_scope = vlas_in_scope;

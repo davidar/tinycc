@@ -132,7 +132,9 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* default target is I386 */
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
-    !defined(TCC_TARGET_X86_64)
+    !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_WASM)
+# define TCC_TARGET_WASM
+/*
 # if defined __x86_64__ || defined _AMD64_
 #  define TCC_TARGET_X86_64
 # elif defined __arm__
@@ -147,6 +149,7 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # ifdef _WIN32
 #  define TCC_TARGET_PE 1
 # endif
+*/
 #endif
 
 /* only native compiler supports -run */
@@ -334,6 +337,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # include "coff.h"
 # include "c67-gen.c"
 # include "c67-link.c"
+#endif
+#ifdef TCC_TARGET_WASM
+# include "wasm-gen.c"
+# include "wasm-link.c"
 #endif
 #undef TARGET_DEFS_ONLY
 
@@ -1465,6 +1472,15 @@ ST_FUNC void relocate_plt(TCCState *s1);
 
 /* ------------ xxx-gen.c ------------ */
 
+enum {
+    BLOCK_VT_JMP = 2,
+    BLOCK_VT_JMPI = 3,
+    BLOCK_IF = 4,
+    BLOCK_IF_ELSE = 5,
+    BLOCK_LOOP = 6,
+    BLOCK_LOOP_CONTINUE = 7,
+};
+
 ST_DATA const int reg_classes[NB_REGS];
 
 ST_FUNC void gsym_addr(int t, int a);
@@ -1475,6 +1491,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *reg
 ST_FUNC void gfunc_call(int nb_args);
 ST_FUNC void gfunc_prolog(CType *func_type);
 ST_FUNC void gfunc_epilog(void);
+ST_FUNC int gblock(int k);
 ST_FUNC int gjmp(int t);
 ST_FUNC void gjmp_addr(int a);
 ST_FUNC int gtst(int inv, int t);
@@ -1488,7 +1505,7 @@ ST_FUNC void gen_opf(int op);
 ST_FUNC void gen_cvt_ftoi(int t);
 ST_FUNC void gen_cvt_ftof(int t);
 ST_FUNC void ggoto(void);
-#ifndef TCC_TARGET_C67
+#if !defined TCC_TARGET_C67 && !defined TCC_TARGET_WASM
 ST_FUNC void o(unsigned int c);
 #endif
 #ifndef TCC_TARGET_ARM
@@ -1567,6 +1584,12 @@ ST_FUNC void gen_clear_cache(void);
 
 /* ------------ c67-gen.c ------------ */
 #ifdef TCC_TARGET_C67
+#endif
+
+/* ------------ wasm-gen.c ------------ */
+#ifdef TCC_TARGET_WASM
+void wasm_init(void);
+void wasm_end(void);
 #endif
 
 /* ------------ tcccoff.c ------------ */

@@ -65,6 +65,10 @@ static int nb_states;
 #include "x86_64-link.c"
 #include "i386-asm.c"
 #endif
+#ifdef TCC_TARGET_WASM
+#include "wasm-gen.c"
+#include "wasm-link.c"
+#endif
 #ifdef CONFIG_TCC_ASM
 #include "tccasm.c"
 #endif
