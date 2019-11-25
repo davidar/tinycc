@@ -63,14 +63,6 @@ ST_DATA int g_debug;
 
 ST_DATA CType char_pointer_type, func_old_type, int_type, size_type, ptrdiff_type;
 
-ST_DATA struct switch_t {
-    struct case_t {
-        int64_t v1, v2;
-	int sym;
-    } **p; int n; /* list of case ranges */
-    int def_sym; /* default symbol */
-} *cur_switch; /* current switch */
-
 /* ------------------------------------------------------------------------- */
 
 static void gen_cast(CType *type);
@@ -5812,73 +5804,6 @@ static void gfunc_return(CType *func_type)
 }
 #endif
 
-static int case_cmp(const void *pa, const void *pb)
-{
-    int64_t a = (*(struct case_t**) pa)->v1;
-    int64_t b = (*(struct case_t**) pb)->v1;
-    return a < b ? -1 : a > b;
-}
-
-static void gcase(struct case_t **base, int len, int *bsym)
-{
-    struct case_t *p;
-    int e;
-    int ll = (vtop->type.t & VT_BTYPE) == VT_LLONG;
-    gv(RC_INT);
-    while (len > 4) {
-        /* binary search */
-        p = base[len/2];
-        vdup();
-	if (ll)
-	    vpushll(p->v2);
-	else
-	    vpushi(p->v2);
-        gen_op(TOK_LE);
-        e = gtst(1, 0);
-        vdup();
-	if (ll)
-	    vpushll(p->v1);
-	else
-	    vpushi(p->v1);
-        gen_op(TOK_GE);
-        gtst_addr(0, p->sym); /* v1 <= x <= v2 */
-        /* x < v1 */
-        gcase(base, len/2, bsym);
-        if (cur_switch->def_sym)
-            gjmp_addr(cur_switch->def_sym);
-        else
-            *bsym = gjmp(*bsym);
-        /* x > v2 */
-        gsym(e);
-        e = len/2 + 1;
-        base += e; len -= e;
-    }
-    /* linear scan */
-    while (len--) {
-        p = *base++;
-        vdup();
-	if (ll)
-	    vpushll(p->v2);
-	else
-	    vpushi(p->v2);
-        if (p->v1 == p->v2) {
-            gen_op(TOK_EQ);
-            gtst_addr(0, p->sym);
-        } else {
-            gen_op(TOK_LE);
-            e = gtst(1, 0);
-            vdup();
-	    if (ll)
-	        vpushll(p->v1);
-	    else
-	        vpushi(p->v1);
-            gen_op(TOK_GE);
-            gtst_addr(0, p->sym);
-            gsym(e);
-        }
-    }
-}
-
 static void block(int *bsym, int *csym, int is_expr)
 {
     int a, b, c, d, cond;
@@ -6097,69 +6022,41 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(';');
     } else
     if (tok == TOK_SWITCH) {
-        struct switch_t *saved, sw;
 	int saved_nocode_wanted = nocode_wanted;
-	SValue switchval;
         next();
         skip('(');
         gexpr();
         skip(')');
-	switchval = *vtop--;
-        a = 0;
-        b = gjmp(0); /* jump to first case */
-        sw.p = NULL; sw.n = 0; sw.def_sym = 0;
-        saved = cur_switch;
-        cur_switch = &sw;
+        a = gblock(BLOCK_SWITCH);
         block(&a, csym, 0);
 	nocode_wanted = saved_nocode_wanted;
-        a = gjmp(a); /* add implicit break */
-        /* case lookup */
-        gsym(b);
-        qsort(sw.p, sw.n, sizeof(void*), case_cmp);
-        for (b = 1; b < sw.n; b++)
-            if (sw.p[b - 1]->v2 >= sw.p[b]->v1)
-                tcc_error("duplicate case value");
-        /* Our switch table sorting is signed, so the compared
-           value needs to be as well when it's 64bit.  */
-        if ((switchval.type.t & VT_BTYPE) == VT_LLONG)
-            switchval.type.t &= ~VT_UNSIGNED;
-        vpushv(&switchval);
-        gcase(sw.p, sw.n, &a);
         vpop();
-        if (sw.def_sym)
-          gjmp_addr(sw.def_sym);
-        dynarray_reset(&sw.p, &sw.n);
-        cur_switch = saved;
-        /* break label */
         gsym(a);
     } else
     if (tok == TOK_CASE) {
-        struct case_t *cr = tcc_malloc(sizeof(struct case_t));
-        if (!cur_switch)
-            expect("switch");
+        int v;
+        int ll = (vtop->type.t & VT_BTYPE) == VT_LLONG;
 	nocode_wanted &= ~0x20000000;
         next();
-        cr->v1 = cr->v2 = expr_const64();
+        v = expr_const64();
         if (gnu_ext && tok == TOK_DOTS) {
-            next();
-            cr->v2 = expr_const64();
-            if (cr->v2 < cr->v1)
-                tcc_warning("empty case range");
+            tcc_error("not supported");
         }
-        cr->sym = ind;
-        dynarray_add(&cur_switch->p, &cur_switch->n, cr);
+        vdup();
+        if (ll)
+            vpushll(v);
+        else
+            vpushi(v);
+        gen_op(TOK_EQ);
+        a = gblock(*bsym | BLOCK_SWITCH_CASE);
         skip(':');
-        is_expr = 0;
-        goto block_after_label;
+        while (tok != TOK_CASE && tok != TOK_DEFAULT && tok != '}')
+            block(bsym, csym, 0);
+        gsym(a);
     } else 
     if (tok == TOK_DEFAULT) {
         next();
         skip(':');
-        if (!cur_switch)
-            expect("switch");
-        if (cur_switch->def_sym)
-            tcc_error("too many 'default'");
-        cur_switch->def_sym = ind;
         is_expr = 0;
         goto block_after_label;
     } else

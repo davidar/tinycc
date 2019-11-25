@@ -1479,6 +1479,8 @@ enum {
     BLOCK_IF_ELSE = 5,
     BLOCK_LOOP = 6,
     BLOCK_LOOP_CONTINUE = 7,
+    BLOCK_SWITCH = 8,
+    BLOCK_SWITCH_CASE = 9,
 };
 
 ST_DATA const int reg_classes[NB_REGS];
@@ -1491,7 +1493,7 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *align, int *reg
 ST_FUNC void gfunc_call(int nb_args);
 ST_FUNC void gfunc_prolog(CType *func_type);
 ST_FUNC void gfunc_epilog(void);
-ST_FUNC int gblock(int k);
+ST_FUNC int gblock(int t);
 ST_FUNC int gjmp(int t);
 ST_FUNC void gjmp_addr(int a);
 ST_FUNC int gtst(int inv, int t);

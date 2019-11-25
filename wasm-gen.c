@@ -289,10 +289,22 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
 
 int num_blocks = 0;
 
-ST_FUNC int gblock(int k) {
-    int i = ++num_blocks;
+ST_FUNC int gblock(int t) {
+    int k = t & 0xff, i = t >> 8;
+    if (!i) i = ++num_blocks;
     if (k == BLOCK_IF) {
         printf("if $B%d\n", i);
+    } else if (k == BLOCK_SWITCH) {
+        printf("block $S%d\n", i);
+        printf("i32.const 0\n");
+    } else if (k == BLOCK_SWITCH_CASE) {
+        int r = gv(RC_INT);
+        printf("get_local $r%d\n", r);
+        printf("i32.or\n");
+        printf("tee_local $r%d\n", r);
+        printf("get_local $r%d\n", r);
+        printf("if $C%d\n", i);
+        vtop--;
     } else {
         printf("block $B%d", i);
         if (k == BLOCK_VT_JMP || k == BLOCK_VT_JMPI) {
@@ -306,7 +318,7 @@ ST_FUNC int gblock(int k) {
 }
 
 void gsym_addr(int t, int a) {
-    log("gsym_addr");
+    tcc_error("gsym_addr");
 }
 
 void gsym(int t) {
@@ -315,6 +327,10 @@ void gsym(int t) {
         log("gsym(0)");
     } else if (k == BLOCK_IF_ELSE) {
         printf("else $B%d\n", i);
+    } else if (k == BLOCK_SWITCH) {
+        printf("end $S%d\n", i);
+    } else if (k == BLOCK_SWITCH_CASE) {
+        printf("end $C%d\n", i);
     } else {
         if (k == BLOCK_VT_JMP || k == BLOCK_VT_JMPI)
             printf("i32.eqz\n");
@@ -332,6 +348,8 @@ int gjmp(int t) {
         tcc_error("gjmp(0)");
     } else if (nocode_wanted) {
         log("no code wanted");
+    } else if (k == BLOCK_SWITCH) {
+        printf("br $S%d\n", i);
     } else if (k == BLOCK_LOOP_CONTINUE) {
         printf("br $L%d\n", i);
     } else {
