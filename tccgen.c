@@ -6029,7 +6029,7 @@ static void block(int *bsym, int *csym, int is_expr)
         next();
         skip(';');
     } else if (tok == TOK_FOR) {
-        int e;
+        TokenString *iter_str = NULL;
 	int saved_nocode_wanted;
 	nocode_wanted &= ~0x20000000;
         next();
@@ -6045,32 +6045,32 @@ static void block(int *bsym, int *csym, int is_expr)
             }
         }
         skip(';');
-        d = ind;
-        c = ind;
+        a = gblock(BLOCK_LOOP);
+        b = a | BLOCK_LOOP_CONTINUE;
         vla_sp_restore();
-        a = 0;
-        b = 0;
         if (tok != ';') {
             gexpr();
-            a = gvtst(1, 0);
+            a = gvtst(1, a);
         }
         skip(';');
         if (tok != ')') {
-            e = gjmp(0);
-            c = ind;
-            vla_sp_restore();
-            gexpr();
-            vpop();
-            gjmp_addr(d);
-            gsym(e);
+            skip_or_save_block(&iter_str);
         }
         skip(')');
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
-        gjmp_addr(c);
+        if (iter_str) {
+            unget_tok(0);
+            begin_macro(iter_str, 1);
+            next();
+            vla_sp_restore();
+            gexpr();
+            vpop();
+            end_macro();
+            next();
+        }
         gsym(a);
-        gsym_addr(b, c);
         --local_scope;
         sym_pop(&local_stack, s, 0);
 

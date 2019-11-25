@@ -1,10 +1,8 @@
 #include <wasi.h>
 
 int main(void) {
-    int i = 0;
-    while (i < 3) {
+    for (int i = 0; i < 5; i++) {
         puts("Hello, world!\n");
-        i++;
     }
     return 0;
 }
