@@ -13,7 +13,7 @@ int f(int i) {
 
 int main(void) {
     for (int i = 0; i < 5; i++) {
-        puts("Hello, world!\n");
+        puts((i < 2) ? "Hello, world!\n" : "...\n");
         if (f(i) != 42)
             puts("Fail\n");
     }

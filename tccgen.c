@@ -5502,12 +5502,13 @@ static void expr_cond(void)
             save_regs(1);
             if (g)
                 gv_dup();
-            tt = gvtst(1, 0);
+            u = gblock(0);
+            tt = gvtst(0, BLOCK_IF);
 
         } else {
             if (!g)
                 vpop();
-            tt = 0;
+            u = tt = 0;
         }
 
         if (1) {
@@ -5521,10 +5522,7 @@ static void expr_cond(void)
             vtop--; /* no vpop so that FP stack is not flushed */
             skip(':');
 
-            u = 0;
-            if (c < 0)
-                u = gjmp(0);
-            gsym(tt);
+            gsym(tt | BLOCK_IF_ELSE);
 
             if (c == 0)
                 nocode_wanted--;
@@ -5619,12 +5617,12 @@ static void expr_cond(void)
                 rc = RC_IRET;
             }
 
-            tt = r2 = 0;
+            r2 = 0;
             if (c < 0) {
                 r2 = gv(rc);
-                tt = gjmp(0);
+                gjmp(u);
             }
-            gsym(u);
+            gsym(tt);
 
             /* this is horrible, but we must also convert first
                operand */
@@ -5642,7 +5640,7 @@ static void expr_cond(void)
                 r1 = gv(rc);
                 move_reg(r2, r1, type.t);
                 vtop->r = r2;
-                gsym(tt);
+                gsym(u);
                 if (islv)
                     indir();
             }
