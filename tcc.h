@@ -1473,6 +1473,7 @@ ST_FUNC void relocate_plt(TCCState *s1);
 /* ------------ xxx-gen.c ------------ */
 
 enum {
+    BLOCK_RETURN = 1,
     BLOCK_VT_JMP = 2,
     BLOCK_VT_JMPI = 3,
     BLOCK_IF = 4,

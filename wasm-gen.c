@@ -336,9 +336,18 @@ void gsym(int t) {
     }
 }
 
+void greturn(void) {
+    int t = func_vt.t & VT_BTYPE;
+    if (t == VT_INT || t == VT_PTR)
+        printf("get_local $r%d\n", REG_IRET);
+}
+
 int gjmp(int t) {
     int k = t & 0xff, i = t >> 8;
-    if (i == 0) {
+    if (k == BLOCK_RETURN) {
+        greturn();
+        printf("return\n");
+    } else if (i == 0) {
         tcc_error("gjmp(0)");
     } else if (nocode_wanted) {
         log("no code wanted");
@@ -441,8 +450,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 }
 
 void gfunc_epilog(void) {
-    int t = func_vt.t;
-    if (t) printf("get_local $r%d\n", REG_IRET);
+    greturn();
     printf(")\n");
 }
 

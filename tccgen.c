@@ -6968,7 +6968,7 @@ static void gen_function(Sym *sym)
     local_scope = 1; /* for function parameters */
     gfunc_prolog(&sym->type);
     local_scope = 0;
-    rsym = 0;
+    rsym = BLOCK_RETURN;
     block(NULL, NULL, 0);
     nocode_wanted = 0;
     gsym(rsym);
