@@ -408,6 +408,10 @@ void gen_opi(int op) {
     }
 }
 
+void gen_opl(int op) {
+    log("gen_opl op=%d", op);
+}
+
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranted to have the same floating point type */
 void gen_opf(int op) {

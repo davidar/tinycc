@@ -685,7 +685,7 @@ ST_FUNC void vpop(void)
 #endif
     if (v == VT_JMP || v == VT_JMPI) {
         /* need to put correct jump if && or || without test */
-        gsym(vtop->c.i);
+        gv(RC_INT);
     }
     vtop--;
 }
@@ -1617,7 +1617,7 @@ ST_FUNC int gvtst(int inv, int t)
     return gtst(inv, t);
 }
 
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
 /* generate CPU independent (unsigned) long long operations */
 static void gen_opl(int op)
 {
@@ -4761,7 +4761,7 @@ ST_FUNC void unary(void)
             vtop->c.i ^= 1;
         else {
             save_regs(1);
-            vseti(VT_JMP, gvtst(1, 0));
+            vseti(VT_JMP, gvtst(1, BLOCK_VT_JMP));
         }
         break;
     case '~':
