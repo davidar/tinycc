@@ -1485,7 +1485,6 @@ enum {
 
 ST_DATA const int reg_classes[NB_REGS];
 
-ST_FUNC void gsym_addr(int t, int a);
 ST_FUNC void gsym(int t);
 ST_FUNC void load(int r, SValue *sv);
 ST_FUNC void store(int r, SValue *v);

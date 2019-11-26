@@ -5806,7 +5806,7 @@ static void gfunc_return(CType *func_type)
 
 static void block(int *bsym, int *csym, int is_expr)
 {
-    int a, b, c, d, cond;
+    int a, b, c, cond;
     Sym *s;
 
     /* generate line number info */
@@ -5863,6 +5863,7 @@ static void block(int *bsym, int *csym, int is_expr)
         block(&a, &b, 0);
 	nocode_wanted = saved_nocode_wanted;
         --local_scope;
+        gjmp(b);
         gsym(a);
     } else if (tok == '{') {
         Sym *llabel;
@@ -5995,6 +5996,7 @@ static void block(int *bsym, int *csym, int is_expr)
             end_macro();
             next();
         }
+        gjmp(b);
         gsym(a);
         --local_scope;
         sym_pop(&local_stack, s, 0);
@@ -6004,9 +6006,8 @@ static void block(int *bsym, int *csym, int is_expr)
 	int saved_nocode_wanted;
 	nocode_wanted &= ~0x20000000;
         next();
-        a = 0;
-        b = 0;
-        d = ind;
+        a = gblock(BLOCK_LOOP);
+        b = gblock(0);
         vla_sp_restore();
 	saved_nocode_wanted = nocode_wanted;
         block(&a, &b, 0);
@@ -6014,8 +6015,7 @@ static void block(int *bsym, int *csym, int is_expr)
         skip('(');
         gsym(b);
 	gexpr();
-	c = gvtst(0, 0);
-	gsym_addr(c, d);
+	gvtst(0, a | BLOCK_LOOP_CONTINUE);
 	nocode_wanted = saved_nocode_wanted;
         skip(')');
         gsym(a);

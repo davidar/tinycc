@@ -14,5 +14,10 @@ int main(void) {
         puts("Hello, world!\n");
         f(i);
     }
+    do {
+        puts("Pass\n");
+        continue;
+        puts("Fail\n");
+    } while (0);
     return 0;
 }

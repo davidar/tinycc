@@ -317,10 +317,6 @@ ST_FUNC int gblock(int t) {
     return (i << 8) | (k & 0xff);
 }
 
-void gsym_addr(int t, int a) {
-    tcc_error("gsym_addr");
-}
-
 void gsym(int t) {
     int k = t & 0xff, i = t >> 8;
     if (i == 0) {
@@ -334,10 +330,8 @@ void gsym(int t) {
     } else {
         if (k == BLOCK_VT_JMP || k == BLOCK_VT_JMPI)
             printf("i32.eqz\n");
-        if (k == BLOCK_LOOP) {
-            printf("br $L%d\n", i);
+        if (k == BLOCK_LOOP)
             printf("end $L%d\n", i);
-        }
         printf("end $B%d\n", i);
     }
 }
@@ -359,7 +353,7 @@ int gjmp(int t) {
 }
 
 void gjmp_addr(int a) {
-    log("gjmp_addr");
+    tcc_error("gjmp_addr");
 }
 
 int gtst(int inv, int t) {
