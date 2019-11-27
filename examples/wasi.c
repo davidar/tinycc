@@ -12,9 +12,11 @@ int f(int i) {
 }
 
 int main(void) {
+    int (*print)(const char *s);
+    print = &puts;
     for (int i = 0; i < 5; i++) {
         if (!i) puts("Begin\n");
-        puts((i < 2) ? "Hello, world!\n" : "...\n");
+        print((i < 2) ? "Hello, world!\n" : "...\n");
         if (f(i) != 42)
             puts("Fail\n");
     }

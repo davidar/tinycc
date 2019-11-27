@@ -6978,6 +6978,7 @@ static void gen_function(Sym *sym)
     sym_pop(&local_stack, NULL, 0);
     /* end of function */
     /* patch symbol size */
+    elfsym(sym)->st_value = func_ind;
     elfsym(sym)->st_size = ind - func_ind;
     tcc_debug_funcend(tcc_state, ind - func_ind);
     /* It's better to crash than to generate wrong code */

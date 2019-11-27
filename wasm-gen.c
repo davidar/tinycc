@@ -72,8 +72,6 @@ ST_DATA const int reg_classes[NB_REGS] = {
 
 #include "tcc.h"
 
-#define DATA_OFFSET 16
-
 #define log(...) { \
     int _log_i; \
     for (_log_i = 0; _log_i < vtop - pvtop; _log_i++) fprintf(stderr, " "); \
@@ -118,6 +116,8 @@ const char *lookup_op(int op) {
 const char *lookup_type(int t) {
     switch(t & VT_BTYPE) {
         case VT_PTR:
+        case VT_BYTE:
+        case VT_SHORT:
         case VT_INT: return "i32";
         case VT_FLOAT: return "f32";
         default: tcc_error("unknown type %#x", t);
@@ -140,7 +140,8 @@ void gfunc_prolog(CType *func_type) {
     Sym *sym = func_type->ref;
     func_vt = sym->type;
     func_var = (sym->c == FUNC_ELLIPSIS);
-    log("gfunc_prolog %s", funcname);
+    log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
+    printf("(elem (i32.const %d) $%s)\n", func_ind, funcname);
 
     printf("(func $%s (export \"%s\") ", funcname, funcname);
     if (sym->f.func_type != FUNC_NEW)
@@ -210,7 +211,14 @@ void load(int r, SValue *sv) {
         if (v == VT_CONST) {
             if (sv->r & VT_SYM) {
                 ElfSym *esym = elfsym(sv->sym);
-                printf("i32.const %d (; %s ;)", DATA_OFFSET + esym->st_value, get_tok_str(sv->sym->v, NULL));
+                const char *section;
+                switch(esym->st_shndx) {
+                    case 1: section = "FUNC"; break;
+                    case 2: section = "DATA"; break;
+                    default: tcc_error("unknown section index %d", esym->st_shndx);
+                }
+                printf("i32.add (get_global $%s) (i32.const %d) (; %s ;)",
+                    section, esym->st_value, get_tok_str(sv->sym->v, NULL));
             } else {
                 printf("i32.const %d", fc);
             }
@@ -246,8 +254,14 @@ void store(int r, SValue *sv) {
 }
 
 void gfunc_call(int nb_args) {
-    Sym *return_sym;
+    Sym *return_sym = vtop[-nb_args].type.ref;
+    int t = return_sym->type.t;
+    int local = (loc - loc_offset) & -8; // keep aligned
+    int indirect = ((vtop[-nb_args].r & (VT_VALMASK | VT_LVAL)) != VT_CONST);
+    int r = -1;
     log("gfunc_call nb_args=%d", nb_args);
+    if (return_sym->f.func_type != FUNC_NEW)
+        tcc_error("unsupported function prototype");
 
     for (int i = 0; i < nb_args; i++) {
         vrotb(nb_args - i);
@@ -259,26 +273,20 @@ void gfunc_call(int nb_args) {
         vtop--;
     }
 
-    return_sym = vtop->type.ref;
-    for (Sym *cur = return_sym->next; cur; cur = cur->next)
-        log("fixed parameter type %d", cur->type.t);
-    if (return_sym->f.func_type == FUNC_ELLIPSIS)
-        log("ellipsis parameter");
-
-    if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
-        const char* name = get_tok_str(vtop->sym->v, NULL);
-        int t = return_sym->type.t;
-        int local = (loc - loc_offset) & -8; // keep aligned
-        if (return_sym->f.func_type != FUNC_NEW)
-            tcc_error("unsupported function prototype");
-        printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n", local);
-        printf("call $%s\n", name);
-        if (t) printf("set_local $r%d\n", REG_IRET);
-        printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n", local);
+    if (indirect) r = gv(RC_INT);
+    printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n", local);
+    if (indirect) {
+        printf("(call_indirect ");
+        for (Sym *cur = return_sym->next; cur; cur = cur->next)
+            printf("(param %s) ", lookup_type(cur->type.t));
+        if (t) printf("(result %s) ", lookup_type(t));
+        printf("(get_local $r%d))\n", r);
     } else {
-        gv(RC_INT);
-        tcc_error("indirect call");
+        const char* name = get_tok_str(vtop->sym->v, NULL);
+        printf("call $%s\n", name);
     }
+    if (t) printf("set_local $r%d\n", REG_IRET);
+    printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n", local);
     vtop--;
 }
 
@@ -456,13 +464,19 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 void gfunc_epilog(void) {
     greturn();
     printf(")\n");
+    ind++;
 }
 
 void wasm_end(void) {
-    printf("(data (i32.const %d) \"", DATA_OFFSET);
-    for (int i = 0; i < data_section->data_offset; i++)
+    int offset = 16, len = data_section->data_offset;
+    printf("(global $DATA i32 (i32.const %d))\n", offset);
+    printf("(global $DATA_LENGTH i32 (i32.const %d))\n", len);
+    printf("(data (i32.const %d) \"", offset);
+    for (int i = 0; i < len; i++)
         printf("\\%02x", data_section->data[i]);
     printf("\")\n");
+    printf("(global $FUNC i32 (i32.const 0))\n");
+    printf("(table %lu anyfunc)\n", text_section->data_offset);
     printf(")\n");
     exit(0);
 }
