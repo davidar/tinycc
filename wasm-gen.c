@@ -21,40 +21,40 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS 5
+#define NB_REGS 12
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
    assumptions on it). */
-#define RC_INT     0x0001 /* generic integer register */
-#define RC_FLOAT   0x0002 /* generic float register */
-#define RC_CMP0    0x0004
-#define RC_CMP1    0x0008
-#define RC_IRET    RC_INT /* function return: integer register */
-#define RC_LRET    RC_INT /* function return: second integer register */
-#define RC_FRET    RC_FLOAT /* function return: float register */
-
-/* pretty names for the registers */
-enum {
-    REG0 = 0,
-    REG1,
-    REG2,
-    REG_CMP0,
-    REG_CMP1,
-};
+#define RC_INT     0x0001
+#define RC_LLONG   0x0002
+#define RC_FLOAT   0x0004
+#define RC_DOUBLE  0x0008
+#define RC_IRET    0x0010
+#define RC_LRET    0x0020
+#define RC_FRET    0x0040
+#define RC_DRET    0x0080
 
 ST_DATA const int reg_classes[NB_REGS] = {
-    /* REG0 */ RC_INT,
-    /* REG1 */ RC_INT,
-    /* REG2 */ RC_INT,
-    /* REG_CMP0 */ RC_CMP0,
-    /* REG_CMP1 */ RC_CMP1,
+    RC_INT | RC_IRET,
+    RC_INT,
+    RC_INT,
+    RC_LLONG | RC_LRET,
+    RC_LLONG,
+    RC_LLONG,
+    RC_FLOAT | RC_FRET,
+    RC_FLOAT,
+    RC_FLOAT,
+    RC_DOUBLE | RC_DRET,
+    RC_DOUBLE,
+    RC_DOUBLE,
 };
 
 /* return registers for function */
-#define REG_IRET REG0 /* single word int return register */
-#define REG_LRET REG1 /* second word return register (for long long) */
-#define REG_FRET REG2 /* float return register */
+#define REG_IRET  0
+#define REG_LRET  3
+#define REG_FRET  6
+#define REG_DRET  9
 
 /* pointer size, in bytes */
 #define PTR_SIZE 4
@@ -72,6 +72,21 @@ ST_DATA const int reg_classes[NB_REGS] = {
 
 #include "tcc.h"
 
+const int reg_types[NB_REGS] = {
+    VT_INT,
+    VT_INT,
+    VT_INT,
+    VT_LLONG,
+    VT_LLONG,
+    VT_LLONG,
+    VT_FLOAT,
+    VT_FLOAT,
+    VT_FLOAT,
+    VT_DOUBLE,
+    VT_DOUBLE,
+    VT_DOUBLE,
+};
+
 #define log(...) { \
     int _log_i; \
     for (_log_i = 0; _log_i < vtop - pvtop; _log_i++) fprintf(stderr, " "); \
@@ -80,6 +95,8 @@ ST_DATA const int reg_classes[NB_REGS] = {
     fprintf(stderr, "\033[0m"); \
     fprintf(stderr, "\n"); \
 }
+
+int aCMP, bCMP, tCMP;
 
 /******************************************************/
 
@@ -118,8 +135,11 @@ const char *lookup_type(int t) {
         case VT_PTR:
         case VT_BYTE:
         case VT_SHORT:
-        case VT_INT: return "i32";
-        case VT_FLOAT: return "f32";
+        case VT_INT:    return "i32";
+        case VT_LLONG:  return "i64";
+        case VT_FLOAT:  return "f32";
+        case VT_LDOUBLE:
+        case VT_DOUBLE: return "f64";
         default: tcc_error("unknown type %#x", t);
     }
 }
@@ -159,84 +179,76 @@ void gfunc_prolog(CType *func_type) {
     if (t) printf("(result %s)", lookup_type(t));
     printf("\n");
     for (int i = 0; i < NB_REGS; i++)
-        printf("(local $r%d i32)\n", i);
+        printf("(local $r%d %s)\n", i, lookup_type(reg_types[i]));
     loc_offset = loc;
 }
 
-void load(int r, SValue *sv) {
+void loads(SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
-    log("load r=%d v=%#x fc=%d ft=%d", r, v, fc, ft);
+    log("loads r=%#x v=%#x fc=%d ft=%d", sv->r, v, fc, ft);
 
     if (v == VT_JMP || v == VT_JMPI) {
         if ((fc & 0xff) - BLOCK_VT_JMP != v - VT_JMP)
             tcc_error("block doesn't support VT_JMP/I");
         gsym(fc);
-        printf("set_local $r%d\n", r);
         return;
     }
 
-    printf("(set_local $r%d (", r);
-
-    if (sv->r & VT_LVAL) {
-        if (v == VT_LOCAL) {
-            if (fc >= 0) {
-                printf("get_local $p%d", fc);
-            } else {
-                printf("i32.load (i32.add (get_global $SP) (i32.const %d))",
-                    fc - loc_offset);
-            }
-        } else if (v == VT_CONST) {
-            tcc_error("handle globals");
-        } else {
-            if ((ft & VT_BTYPE) == VT_FLOAT) {
-                printf("f32.load");
-            } else if ((ft & VT_BTYPE) == VT_DOUBLE) {
-                printf("f64.load");
-            } else if ((ft & VT_BTYPE) == VT_LDOUBLE) {
-                printf("f64.load");
-            } else if ((ft & VT_TYPE) == VT_BYTE) {
-                printf("i32.load8_s");
-            } else if ((ft & VT_TYPE) == (VT_BYTE | VT_UNSIGNED)) {
-                printf("i32.load8_u");
-            } else if ((ft & VT_TYPE) == VT_SHORT) {
-                printf("i32.load16_s");
-            } else if ((ft & VT_TYPE) == (VT_SHORT | VT_UNSIGNED)) {
-                printf("i32.load16_u");
-            } else {
-                printf("i32.load");
-            }
-            printf(" (get_local $r%d)", v);
-        }
-    } else {
-        if (v == VT_CONST) {
-            if (sv->r & VT_SYM) {
-                ElfSym *esym = elfsym(sv->sym);
-                const char *section;
-                switch(esym->st_shndx) {
-                    case 1: section = "FUNC"; break;
-                    case 2: section = "DATA"; break;
-                    default: tcc_error("unknown section index %d", esym->st_shndx);
-                }
-                printf("i32.add (get_global $%s) (i32.const %d) (; %s ;)",
-                    section, esym->st_value, get_tok_str(sv->sym->v, NULL));
-            } else {
-                printf("i32.const %d", fc);
-            }
-        } else if (v == VT_LOCAL) {
-            if (fc >= 0) {
-                tcc_error("can't load address of function parameter");
-            } else {
-                printf("i32.add (get_global $SP) (i32.const %d)", fc - loc_offset);
-            }
-        } else if (v == VT_CMP) {
-            printf("i32.%s (get_local $r%d) (get_local $r%d)",
-                lookup_op(fc), REG_CMP0, REG_CMP1);
-        } else {
-            printf("get_local $r%d", v);
-        }
+    if (v == VT_CMP) {
+        printf("(%s.%s (get_local $r%d) (get_local $r%d))\n",
+            lookup_type(tCMP), lookup_op(fc), aCMP, bCMP);
+        return;
     }
 
-    printf("))\n");
+    if (sv->r == (VT_LVAL | VT_LOCAL) && fc >= 0) {
+        printf("get_local $p%d\n", fc);
+        return;
+    }
+
+    if (v == VT_CONST) {
+        if (sv->r & VT_SYM) {
+            ElfSym *esym = elfsym(sv->sym);
+            const char *section;
+            switch(esym->st_shndx) {
+                case 1: section = "FUNC"; break;
+                case 2: section = "DATA"; break;
+                default: tcc_error("unknown section index %d", esym->st_shndx);
+            }
+            printf("(i32.add (get_global $%s) (i32.const %d) (; %s ;))",
+                section, esym->st_value, get_tok_str(sv->sym->v, NULL));
+        } else {
+            printf("i32.const %d", fc);
+        }
+    } else if (v == VT_LOCAL) {
+        if (fc >= 0) {
+            tcc_error("can't load address of function parameter");
+        } else {
+            printf("(i32.add (get_global $SP) (i32.const %d))", fc - loc_offset);
+        }
+    } else {
+        printf("get_local $r%d", v);
+    }
+    printf("\n");
+
+    if (sv->r & VT_LVAL) {
+        switch (ft & VT_BTYPE) {
+            case VT_FLOAT:             printf("f32.load"); break;
+            case VT_LDOUBLE:
+            case VT_DOUBLE:            printf("f64.load"); break;
+            case VT_BYTE:              printf("i32.load8_s"); break;
+            case VT_BYTE|VT_UNSIGNED:  printf("i32.load8_u"); break;
+            case VT_SHORT:             printf("i32.load16_s"); break;
+            case VT_SHORT|VT_UNSIGNED: printf("i32.load16_u"); break;
+            default:                   printf("i32.load");
+        }
+        printf("\n");
+    }
+}
+
+void load(int r, SValue *sv) {
+    log("load %d", r);
+    loads(sv);
+    printf("set_local $r%d\n", r);
 }
 
 void store(int r, SValue *sv) {
@@ -251,6 +263,23 @@ void store(int r, SValue *sv) {
     } else {
         tcc_error("indirect store");
     }
+}
+
+void greturn(int t, int set) {
+    int r;
+    switch (t & VT_BTYPE) {
+        case VT_PTR:
+        case VT_BYTE:
+        case VT_SHORT:
+        case VT_INT:    r = REG_IRET; break;
+        case VT_LLONG:  r = REG_LRET; break;
+        case VT_FLOAT:  r = REG_FRET; break;
+        case VT_LDOUBLE:
+        case VT_DOUBLE: r = REG_DRET; break;
+        case VT_VOID: return;
+        default: tcc_error("return %s", lookup_type(t));
+    }
+    printf("%s_local $r%d\n", set ? "set" : "get", r);
 }
 
 void gfunc_call(int nb_args) {
@@ -285,7 +314,7 @@ void gfunc_call(int nb_args) {
         const char* name = get_tok_str(vtop->sym->v, NULL);
         printf("call $%s\n", name);
     }
-    if (t) printf("set_local $r%d\n", REG_IRET);
+    greturn(t, 1);
     printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n", local);
     vtop--;
 }
@@ -344,16 +373,10 @@ void gsym(int t) {
     }
 }
 
-void greturn(void) {
-    int t = func_vt.t & VT_BTYPE;
-    if (t == VT_INT || t == VT_PTR)
-        printf("get_local $r%d\n", REG_IRET);
-}
-
 int gjmp(int t) {
     int k = t & 0xff, i = t >> 8;
     if (k == BLOCK_RETURN) {
-        greturn();
+        greturn(func_vt.t, 0);
         printf("return\n");
     } else if (i == 0) {
         tcc_error("gjmp(0)");
@@ -399,47 +422,86 @@ int gtst(int inv, int t) {
 }
 
 void gen_opi(int op) {
+    int r, fr;
     log("gen_opi op=%#x", op);
+    gv2(RC_INT, RC_INT);
+    r = vtop[-1].r;
+    fr = vtop[0].r;
+    vtop--;
     if (TOK_ULT <= op && op <= TOK_GT) {
-        gv2(RC_CMP0, RC_CMP1);
-        vtop--;
+        aCMP = r;
+        bCMP = fr;
+        tCMP = vtop->type.t;
         vtop->r = VT_CMP;
         vtop->c.i = op;
     } else {
-        int r, fr;
-        gv2(RC_INT, RC_INT);
-        r = vtop[-1].r;
-        fr = vtop[0].r;
-        vtop--;
         printf("(set_local $r%d (i32.%s (get_local $r%d) (get_local $r%d)))\n",
             r, lookup_op(op), r, fr);
     }
 }
 
 void gen_opl(int op) {
-    log("gen_opl op=%d", op);
+    log("gen_opl op=%#x", op);
+    tcc_error("%s:%d", __FILE__, __LINE__);
 }
 
 /* generate a floating point operation 'v = t1 op t2' instruction. The
    two operands are guaranted to have the same floating point type */
 void gen_opf(int op) {
-    log("gen_opf op=%d", op);
+    int r, fr, t;
+    log("gen_opf op=%#x", op);
+    if (vtop->type.t == VT_FLOAT) {
+        gv2(RC_FLOAT, RC_FLOAT);
+    } else {
+        gv2(RC_DOUBLE, RC_DOUBLE);
+    }
+    r = vtop[-1].r;
+    fr = vtop[0].r;
+    t = vtop->type.t;
+    vtop--;
+    if (TOK_ULT <= op && op <= TOK_GT) {
+        aCMP = r;
+        bCMP = fr;
+        tCMP = t;
+        vtop->r = VT_CMP;
+        vtop->c.i = op;
+    } else {
+        printf("(set_local $r%d (%s.%s (get_local $r%d) (get_local $r%d)))\n",
+            r, lookup_type(t), lookup_op(op), r, fr);
+    }
 }
 
 /* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
    and 'long long' cases. */
 void gen_cvt_itof(int t) {
     log("gen_cvt_itof t=%d", t);
+    tcc_error("%s:%d", __FILE__, __LINE__);
 }
 
 /* convert fp to int 't' type */
 void gen_cvt_ftoi(int t) {
     log("gen_cvt_ftoi t=%d", t);
+    tcc_error("%s:%d", __FILE__, __LINE__);
 }
 
 /* convert from one floating point type to another */
 void gen_cvt_ftof(int t) {
-    log("gen_cvt_ftof t=%d", t);
+    int s = vtop->type.t;
+    log("gen_cvt_ftof from %s to %s", lookup_type(s), lookup_type(t));
+    if (s == VT_FLOAT && t == VT_DOUBLE) {
+        int r = gv(RC_FLOAT);
+        save_reg(REG_DRET);
+        printf("(set_local $r%d (f64.promote_f32 (get_local $r%d)))\n", REG_DRET, r);
+        vtop->r = REG_DRET;
+    } else if (s == VT_DOUBLE && t == VT_FLOAT) {
+        int r = gv(RC_DOUBLE);
+        save_reg(REG_FRET);
+        printf("(set_local $r%d (f32.demote_f64 (get_local $r%d)))\n", REG_FRET, r);
+        vtop->r = REG_FRET;
+    } else {
+        tcc_error("float conversion");
+    }
+    vtop->type.t = t;
 }
 
 void ggoto(void) {
@@ -462,7 +524,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 }
 
 void gfunc_epilog(void) {
-    greturn();
+    greturn(func_vt.t, 0);
     printf(")\n");
     ind++;
 }
