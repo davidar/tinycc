@@ -1591,6 +1591,7 @@ ST_FUNC void gen_clear_cache(void);
 /* ------------ wasm-gen.c ------------ */
 #ifdef TCC_TARGET_WASM
 void gen_opl(int op);
+void gen_cvt_itoi(int t);
 void wasm_init(void);
 void wasm_end(void);
 #endif

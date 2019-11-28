@@ -1,6 +1,7 @@
 #include <wasi.h>
 
-float f(int i) {
+float f(long long i) {
+    int j = i;
     float r = 42;
     r += .5;
     switch(i) {

@@ -1006,7 +1006,7 @@ ST_FUNC void save_reg_upstack(int r, int n)
                     o(0xd8dd); /* fstp %st(0) */
                 }
 #endif
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
                 /* special long long case */
                 if ((type->t & VT_BTYPE) == VT_LLONG) {
                     sv.c.i += 4;
@@ -1324,7 +1324,7 @@ ST_FUNC int gv(int rc)
         if (r >= VT_CONST
          || (vtop->r & VT_LVAL)
          || !(reg_classes[r] & rc)
-#if PTR_SIZE == 8
+#if PTR_SIZE == 8 || defined TCC_TARGET_WASM
          || ((vtop->type.t & VT_BTYPE) == VT_QLONG && !(reg_classes[vtop->r2] & rc2))
          || ((vtop->type.t & VT_BTYPE) == VT_QFLOAT && !(reg_classes[vtop->r2] & rc2))
 #else
@@ -1333,7 +1333,7 @@ ST_FUNC int gv(int rc)
             )
         {
             r = get_reg(rc);
-#if PTR_SIZE == 8
+#if PTR_SIZE == 8 || defined TCC_TARGET_WASM
             if (((vtop->type.t & VT_BTYPE) == VT_QLONG) || ((vtop->type.t & VT_BTYPE) == VT_QFLOAT)) {
                 int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
 #else
@@ -1345,7 +1345,7 @@ ST_FUNC int gv(int rc)
                 original_type = vtop->type.t;
                 /* two register type load : expand to two words
                    temporarily */
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
                 if ((vtop->r & (VT_VALMASK | VT_LVAL)) == VT_CONST) {
                     /* load constant */
                     ll = vtop->c.i;
@@ -1481,7 +1481,7 @@ static int reg_fret(int t)
     return REG_FRET;
 }
 
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
 /* expand 64bit on stack in two ints */
 static void lexpand(void)
 {
@@ -1532,7 +1532,7 @@ ST_FUNC void lexpand_nr(void)
 }
 #endif
 
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
 /* build a long long from two ints */
 static void lbuild(int t)
 {
@@ -1551,7 +1551,7 @@ static void gv_dup(void)
     SValue sv;
 
     t = vtop->type.t;
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
     if ((t & VT_BTYPE) == VT_LLONG) {
         if (t & VT_BITFIELD) {
             gv(RC_INT);
@@ -2578,6 +2578,9 @@ static void gen_cast(CType *type)
                     /* scalar to long long */
                     /* machine independent conversion */
                     gv(RC_INT);
+#ifdef TCC_TARGET_WASM
+                    gen_cvt_itoi(dbt);
+#else
                     /* generate high word */
                     if (sbt == (VT_INT | VT_UNSIGNED)) {
                         vpushi(0);
@@ -2595,6 +2598,7 @@ static void gen_cast(CType *type)
                     /* patch second register */
                     vtop[-1].r2 = vtop->r;
                     vpop();
+#endif
                 }
 #else
             } else if ((dbt & VT_BTYPE) == VT_LLONG ||
@@ -2635,8 +2639,12 @@ static void gen_cast(CType *type)
                 /* scalar to int */
                 if ((sbt & VT_BTYPE) == VT_LLONG) {
                     /* from long long: just take low order word */
+#ifdef TCC_TARGET_WASM
+                    gen_cvt_itoi(dbt);
+#else
                     lexpand();
                     vpop();
+#endif
                 } 
                 /* if lvalue and single word type, nothing to do because
                    the lvalue already contains the real type size (see
@@ -3205,7 +3213,7 @@ ST_FUNC void vstore(void)
                 vtop[-1].r = t | VT_LVAL;
             }
             /* two word case handling : store second register at word + 4 (or +8 for x86-64)  */
-#if PTR_SIZE == 8
+#if PTR_SIZE == 8 || defined TCC_TARGET_WASM
             if (((ft & VT_BTYPE) == VT_QLONG) || ((ft & VT_BTYPE) == VT_QFLOAT)) {
                 int addr_type = VT_LLONG, load_size = 8, load_type = ((vtop->type.t & VT_BTYPE) == VT_QLONG) ? VT_LLONG : VT_DOUBLE;
 #else
