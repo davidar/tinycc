@@ -87,6 +87,8 @@ const int reg_types[NB_REGS] = {
     VT_DOUBLE,
 };
 
+#define ALIGNMENT_MASK (-8)
+
 #define log(...) { \
     int _log_i; \
     for (_log_i = 0; _log_i < vtop - pvtop; _log_i++) fprintf(stderr, " "); \
@@ -152,19 +154,23 @@ void wasm_init(void) {
     printf("(memory (export \"memory\") 2)\n");
 }
 
-int loc_offset = 0;
-
 void gfunc_prolog(CType *func_type) {
     int addr = 0, t;
     Sym *sym = func_type->ref;
     func_vt = sym->type;
     func_var = (sym->c == FUNC_ELLIPSIS);
+    loc = 0;
     log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
     printf("(elem (i32.const %d) $%s)\n", func_ind, funcname);
 
     printf("(func $%s (export \"%s\") ", funcname, funcname);
     if (sym->f.func_type != FUNC_NEW)
         tcc_error("unsupported function prototype");
+
+    if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
+        func_vc = addr++;
+        printf("(param $p%d %s) ", func_vc, lookup_type(VT_PTR));
+    }
 
     while ((sym = sym->next) != NULL) {
         t = sym->type.t;
@@ -175,11 +181,39 @@ void gfunc_prolog(CType *func_type) {
     }
 
     t = func_vt.t;
-    if (t) printf("(result %s)", lookup_type(t));
+    if (t && (func_vt.t & VT_BTYPE) != VT_STRUCT)
+        printf("(result %s)", lookup_type(t));
     printf("\n");
     for (int i = 0; i < NB_REGS; i++)
         printf("(local $r%d %s)\n", i, lookup_type(reg_types[i]));
-    loc_offset = loc;
+}
+
+void gsv(SValue *sv) {
+    int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
+    if (v == VT_CONST) {
+        if (sv->r & VT_SYM) {
+            ElfSym *esym = elfsym(sv->sym);
+            const char *section;
+            switch(esym->st_shndx) {
+                case 1: section = "FUNC"; break;
+                case 2: section = "DATA"; break;
+                default: tcc_error("unknown section index %d", esym->st_shndx);
+            }
+            printf("(i32.add (get_global $%s) (i32.const %d) (; %s ;))",
+                section, esym->st_value, get_tok_str(sv->sym->v, NULL));
+        } else {
+            printf("%s.const %d", lookup_type(ft), fc);
+        }
+    } else if (v == VT_LOCAL) {
+        if (fc >= 0) {
+            tcc_error("can't load address of function parameter");
+        } else {
+            printf("(i32.add (get_global $SP) (i32.const %d))", fc);
+        }
+    } else {
+        printf("get_local $r%d", v);
+    }
+    printf("\n");
 }
 
 void loads(SValue *sv) {
@@ -204,37 +238,13 @@ void loads(SValue *sv) {
         return;
     }
 
-    if (v == VT_CONST) {
-        if (sv->r & VT_SYM) {
-            ElfSym *esym = elfsym(sv->sym);
-            const char *section;
-            switch(esym->st_shndx) {
-                case 1: section = "FUNC"; break;
-                case 2: section = "DATA"; break;
-                default: tcc_error("unknown section index %d", esym->st_shndx);
-            }
-            printf("(i32.add (get_global $%s) (i32.const %d) (; %s ;))",
-                section, esym->st_value, get_tok_str(sv->sym->v, NULL));
-        } else {
-            printf("%s.const %d", lookup_type(ft), fc);
-        }
-    } else if (v == VT_LOCAL) {
-        if (fc >= 0) {
-            tcc_error("can't load address of function parameter");
-        } else {
-            printf("(i32.add (get_global $SP) (i32.const %d))", fc - loc_offset);
-        }
-    } else {
-        printf("get_local $r%d", v);
-    }
-    printf("\n");
+    gsv(sv);
 
     if (sv->r & VT_LVAL) {
+        char s = (ft & VT_UNSIGNED) ? 'u' : 's';
         switch (ft & VT_BTYPE) {
-            case VT_BYTE:              printf("i32.load8_s"); break;
-            case VT_BYTE|VT_UNSIGNED:  printf("i32.load8_u"); break;
-            case VT_SHORT:             printf("i32.load16_s"); break;
-            case VT_SHORT|VT_UNSIGNED: printf("i32.load16_u"); break;
+            case VT_BYTE: printf("i32.load8_%c", s); break;
+            case VT_SHORT: printf("i32.load16_%c", s); break;
             default: printf("%s.load", lookup_type(ft));
         }
         printf("\n");
@@ -250,15 +260,14 @@ void load(int r, SValue *sv) {
 void store(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
     log("store r=%d v=%#x fc=%d ft=%d", r, v, fc, ft);
-
-    if (v == VT_LOCAL) {
-        printf("(i32.store (i32.add (get_global $SP) (i32.const %d)) (get_local $r%d))\n",
-            fc - loc_offset, r);
-    } else if (v == VT_CONST) {
-        tcc_error("handle globals");
-    } else {
-        tcc_error("indirect store");
+    gsv(sv);
+    printf("get_local $r%d\n", r);
+    switch (ft & VT_BTYPE) {
+        case VT_BYTE: printf("i32.store8"); break;
+        case VT_SHORT: printf("i32.store16"); break;
+        default: printf("%s.store", lookup_type(ft));
     }
+    printf("\n");
 }
 
 void greturn(int t, int set) {
@@ -272,6 +281,7 @@ void greturn(int t, int set) {
         case VT_FLOAT:  r = REG_FRET; break;
         case VT_LDOUBLE:
         case VT_DOUBLE: r = REG_DRET; break;
+        case VT_STRUCT:
         case VT_VOID: return;
         default: tcc_error("return %s", lookup_type(t));
     }
@@ -281,12 +291,10 @@ void greturn(int t, int set) {
 void gfunc_call(int nb_args) {
     Sym *return_sym = vtop[-nb_args].type.ref;
     int t = return_sym->type.t;
-    int local = (loc - loc_offset) & -8; // keep aligned
+    int local = loc & ALIGNMENT_MASK;
     int indirect = ((vtop[-nb_args].r & (VT_VALMASK | VT_LVAL)) != VT_CONST);
     int r = -1;
     log("gfunc_call nb_args=%d", nb_args);
-    if (return_sym->f.func_type != FUNC_NEW)
-        tcc_error("unsupported function prototype");
 
     for (int i = 0; i < nb_args; i++) {
         vrotb(nb_args - i);
@@ -312,6 +320,8 @@ void gfunc_call(int nb_args) {
     if (indirect) r = gv(RC_INT);
     printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n", local);
     if (indirect) {
+        if (return_sym->f.func_type != FUNC_NEW)
+            tcc_error("unsupported function prototype for indirect call");
         printf("(call_indirect ");
         for (Sym *cur = return_sym->next; cur; cur = cur->next)
             printf("(param %s) ", lookup_type(cur->type.t));
@@ -541,7 +551,8 @@ void gfunc_epilog(void) {
 }
 
 void wasm_end(void) {
-    int offset = 16, len = data_section->data_offset, sp = (offset + len + (1 << 16)) & -8;
+    int offset = 16, len = data_section->data_offset,
+        sp = (offset + len + (1 << 16)) & ALIGNMENT_MASK;
     printf("(global $DATA (export \"__memory_base\") i32 (i32.const %d))\n", offset);
     printf("(global (export \"__data_end\") i32 (i32.const %d))\n", offset + len);
     printf("(global (export \"__heap_base\") i32 (i32.const %d))\n", sp);

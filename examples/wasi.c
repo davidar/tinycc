@@ -1,16 +1,22 @@
 #include <wasi.h>
 
-float f(long long i) {
-    int j = i;
-    float r = 42;
-    r += .5;
+struct s {
+    int i;
+    float f;
+};
+
+struct s f(long long i) {
+    struct s s;
+    s.i = i;
+    s.f = 42;
+    s.f += .5;
     switch(i) {
         case 1: puts("foo");
         case 2: puts("bar"); break;
         default: puts("baz");
     }
     puts("\n\n");
-    return r;
+    return s;
     puts("Fail\n");
 }
 
@@ -20,7 +26,7 @@ int main(void) {
     for (int i = 0; i < 5; i++) {
         if (!i) puts("Begin\n");
         print((i < 2) ? "Hello, world!\n" : "...\n");
-        if (f(i) != 42.5)
+        if (f(i).f != 42.5)
             puts("Fail\n");
     }
     do {

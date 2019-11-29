@@ -66,6 +66,17 @@ int puts(const char *s) {
     return nwritten;
 }
 
+char *memcpy(char *dest, const char *src, size_t n) {
+    for (int i = 0; i < n; i++)
+        dest[i] = src[i];
+    return dest;
+}
+
+void *memmove(void *dest, const void *src, size_t n) {
+    if (dest != src) memcpy(dest, src, n);
+    return dest;
+}
+
 int main(void);
 
 void _start(void) {
