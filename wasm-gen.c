@@ -149,9 +149,7 @@ void wasm_init(void) {
     printf("(module\n");
     printf("(import \"wasi_unstable\" \"fd_write\"");
     printf(" (func $__wasi_fd_write (param i32 i32 i32 i32) (result i32)))\n");
-    printf("(memory 1)\n");
-    printf("(export \"memory\" (memory 0))\n");
-    printf("(global $SP (mut i32) (i32.const %d))\n", 4096);
+    printf("(memory (export \"memory\") 2)\n");
 }
 
 int loc_offset = 0;
@@ -543,15 +541,19 @@ void gfunc_epilog(void) {
 }
 
 void wasm_end(void) {
-    int offset = 16, len = data_section->data_offset;
-    printf("(global $DATA i32 (i32.const %d))\n", offset);
-    printf("(global $DATA_LENGTH i32 (i32.const %d))\n", len);
+    int offset = 16, len = data_section->data_offset, sp = (offset + len + (1 << 16)) & -8;
+    printf("(global $DATA (export \"__memory_base\") i32 (i32.const %d))\n", offset);
+    printf("(global (export \"__data_end\") i32 (i32.const %d))\n", offset + len);
+    printf("(global (export \"__heap_base\") i32 (i32.const %d))\n", sp);
+    printf("(global $SP (export \"__stack_pointer\") (mut i32) (i32.const %d))\n", sp);
     printf("(data (i32.const %d) \"", offset);
     for (int i = 0; i < len; i++)
         printf("\\%02x", data_section->data[i]);
     printf("\")\n");
-    printf("(global $FUNC i32 (i32.const 0))\n");
-    printf("(table %lu anyfunc)\n", text_section->data_offset);
+
+    printf("(global $FUNC (export \"__table_base\") i32 (i32.const 0))\n");
+    printf("(table (export \"__indirect_function_table\") %lu anyfunc)\n",
+        text_section->data_offset);
     printf(")\n");
     exit(0);
 }
