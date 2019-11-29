@@ -10,6 +10,7 @@ struct s f(long long i) {
     s.i = i;
     s.f = 42;
     s.f += .5;
+    s.f += i;
     switch(i) {
         case 1: puts("foo");
         case 2: puts("bar"); break;
@@ -26,7 +27,7 @@ int main(void) {
     for (int i = 0; i < 5; i++) {
         if (!i) puts("Begin\n");
         print((i < 2) ? "Hello, world!\n" : "...\n");
-        if (f(i).f != 42.5)
+        if ((int) f(i).f != 42 + i)
             puts("Fail\n");
     }
     do {

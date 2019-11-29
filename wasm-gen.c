@@ -270,22 +270,34 @@ void store(int r, SValue *sv) {
     printf("\n");
 }
 
-void greturn(int t, int set) {
-    int r;
+int gvt(int t) {
     switch (t & VT_BTYPE) {
         case VT_PTR:
         case VT_BYTE:
         case VT_SHORT:
-        case VT_INT:    r = REG_IRET; break;
-        case VT_LLONG:  r = REG_LRET; break;
-        case VT_FLOAT:  r = REG_FRET; break;
+        case VT_INT:    return gv(RC_INT);
+        case VT_LLONG:  return gv(RC_LLONG);
+        case VT_FLOAT:  return gv(RC_FLOAT);
         case VT_LDOUBLE:
-        case VT_DOUBLE: r = REG_DRET; break;
+        case VT_DOUBLE: return gv(RC_DOUBLE);
+        default: tcc_error("gvt(%s)", lookup_type(t));
+    }
+}
+
+int greturn(int t) {
+    switch (t & VT_BTYPE) {
+        case VT_PTR:
+        case VT_BYTE:
+        case VT_SHORT:
+        case VT_INT:    return REG_IRET;
+        case VT_LLONG:  return REG_LRET;
+        case VT_FLOAT:  return REG_FRET;
+        case VT_LDOUBLE:
+        case VT_DOUBLE: return REG_DRET;
         case VT_STRUCT:
-        case VT_VOID: return;
+        case VT_VOID:   return -1;
         default: tcc_error("return %s", lookup_type(t));
     }
-    printf("%s_local $r%d\n", set ? "set" : "get", r);
 }
 
 void gfunc_call(int nb_args) {
@@ -301,18 +313,7 @@ void gfunc_call(int nb_args) {
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             tcc_error("structures passed as value not handled yet");
         } else {
-            switch (vtop->type.t & VT_BTYPE) {
-                case VT_PTR:
-                case VT_BYTE:
-                case VT_SHORT:
-                case VT_INT:    r = gv(RC_INT); break;
-                case VT_LLONG:  r = gv(RC_LLONG); break;
-                case VT_FLOAT:  r = gv(RC_FLOAT); break;
-                case VT_LDOUBLE:
-                case VT_DOUBLE: r = gv(RC_DOUBLE); break;
-                default: tcc_error("arg %s", lookup_type(t));
-            }
-            printf("get_local $r%d\n", r);
+            printf("get_local $r%d\n", gvt(vtop->type.t));
         }
         vtop--;
     }
@@ -331,7 +332,8 @@ void gfunc_call(int nb_args) {
         const char* name = get_tok_str(vtop->sym->v, NULL);
         printf("call $%s\n", name);
     }
-    greturn(t, 1);
+    r = greturn(t);
+    if (r >= 0) printf("set_local $r%d\n", r);
     printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n", local);
     vtop--;
 }
@@ -393,7 +395,8 @@ void gsym(int t) {
 int gjmp(int t) {
     int k = t & 0xff, i = t >> 8;
     if (k == BLOCK_RETURN) {
-        greturn(func_vt.t, 0);
+        int r = greturn(func_vt.t);
+        if (r >= 0) printf("get_local $r%d\n", r);
         printf("return\n");
     } else if (i == 0) {
         tcc_error("gjmp(0)");
@@ -473,57 +476,38 @@ void gen_opf(int op) {
     gen_opx(op);
 }
 
-void gen_cvt_itoi(int t) {
-    int s = vtop->type.t;
-    log("gen_cvt_itoi from %s to %s", lookup_type(s), lookup_type(t));
+void gen_cvt(int t) {
+    int s = vtop->type.t, r = gvt(s);
+    char us = (s & VT_UNSIGNED) ? 'u' : 's';
+    char ut = (t & VT_UNSIGNED) ? 'u' : 's';
+    printf("get_local $r%d\n", r);
     if (s == VT_INT && t == VT_LLONG) {
-        int r = gv(RC_INT);
-        save_reg(REG_LRET);
-        printf("(set_local $r%d (i64.extend_i32_%s (get_local $r%d)))\n",
-            REG_LRET, (s & VT_UNSIGNED) ? "u" : "s", r);
-        vtop->r = REG_LRET;
+        printf("i64.extend_i32_%c", us);
     } else if (s == VT_LLONG && t == VT_INT) {
-        int r = gv(RC_LLONG);
-        save_reg(REG_IRET);
-        printf("(set_local $r%d (i32.wrap_i64 (get_local $r%d)))\n", REG_IRET, r);
-        vtop->r = REG_IRET;
-    } else {
-        tcc_error("int conversion");
-    }
-}
-
-/* convert integers to fp 't' type. Must handle 'int', 'unsigned int'
-   and 'long long' cases. */
-void gen_cvt_itof(int t) {
-    log("gen_cvt_itof t=%d", t);
-    tcc_error("%s:%d", __FILE__, __LINE__);
-}
-
-/* convert fp to int 't' type */
-void gen_cvt_ftoi(int t) {
-    log("gen_cvt_ftoi t=%d", t);
-    tcc_error("%s:%d", __FILE__, __LINE__);
-}
-
-/* convert from one floating point type to another */
-void gen_cvt_ftof(int t) {
-    int s = vtop->type.t;
-    log("gen_cvt_ftof from %s to %s", lookup_type(s), lookup_type(t));
-    if (s == VT_FLOAT && t == VT_DOUBLE) {
-        int r = gv(RC_FLOAT);
-        save_reg(REG_DRET);
-        printf("(set_local $r%d (f64.promote_f32 (get_local $r%d)))\n", REG_DRET, r);
-        vtop->r = REG_DRET;
+        printf("i32.wrap_i64");
+    } else if (s == VT_FLOAT && t == VT_DOUBLE) {
+        printf("f64.promote_f32");
     } else if (s == VT_DOUBLE && t == VT_FLOAT) {
-        int r = gv(RC_DOUBLE);
-        save_reg(REG_FRET);
-        printf("(set_local $r%d (f32.demote_f64 (get_local $r%d)))\n", REG_FRET, r);
-        vtop->r = REG_FRET;
+        printf("f32.demote_f64");
+    } else if (is_float(s) && !is_float(t)) {
+        printf("%s.trunc_%s_%c", lookup_type(t), lookup_type(s), ut);
+    } else if (!is_float(s) && is_float(t)) {
+        printf("%s.convert_%s_%c", lookup_type(t), lookup_type(s), us);
     } else {
-        tcc_error("float conversion");
+        tcc_error("can't cast %s to %s", lookup_type(s), lookup_type(t));
     }
+    printf("\n");
+    r = greturn(t);
+    save_reg(r);
+    printf("set_local $r%d\n", r);
+    vtop->r = r;
     vtop->type.t = t;
 }
+
+void gen_cvt_itoi(int t) { gen_cvt(t); }
+void gen_cvt_itof(int t) { gen_cvt(t); }
+void gen_cvt_ftoi(int t) { gen_cvt(t); }
+void gen_cvt_ftof(int t) { gen_cvt(t); }
 
 void ggoto(void) {
     tcc_error("computed goto");
@@ -545,7 +529,8 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 }
 
 void gfunc_epilog(void) {
-    greturn(func_vt.t, 0);
+    int r = greturn(func_vt.t);
+    if (r >= 0) printf("get_local $r%d\n", r);
     printf(")\n");
     ind++;
 }
