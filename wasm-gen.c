@@ -21,7 +21,7 @@
 #ifdef TARGET_DEFS_ONLY
 
 /* number of available registers */
-#define NB_REGS 12
+#define NB_REGS 13
 
 /* a register can belong to several classes. The classes must be
    sorted from more general to more precise (see gv2() code which does
@@ -34,27 +34,29 @@
 #define RC_LRET    0x0020
 #define RC_FRET    0x0040
 #define RC_DRET    0x0080
+#define RC_INLINE  0x0100
 
 ST_DATA const int reg_classes[NB_REGS] = {
+    RC_INLINE,
+    RC_INT,
+    RC_INT,
     RC_INT | RC_IRET,
-    RC_INT,
-    RC_INT,
+    RC_LLONG,
+    RC_LLONG,
     RC_LLONG | RC_LRET,
-    RC_LLONG,
-    RC_LLONG,
+    RC_FLOAT,
+    RC_FLOAT,
     RC_FLOAT | RC_FRET,
-    RC_FLOAT,
-    RC_FLOAT,
+    RC_DOUBLE,
+    RC_DOUBLE,
     RC_DOUBLE | RC_DRET,
-    RC_DOUBLE,
-    RC_DOUBLE,
 };
 
 /* return registers for function */
-#define REG_IRET  0
-#define REG_LRET  3
-#define REG_FRET  6
-#define REG_DRET  9
+#define REG_IRET  3
+#define REG_LRET  6
+#define REG_FRET  9
+#define REG_DRET 12
 
 /* pointer size, in bytes */
 #define PTR_SIZE 4
@@ -73,6 +75,7 @@ ST_DATA const int reg_classes[NB_REGS] = {
 #include "tcc.h"
 
 const int reg_types[NB_REGS] = {
+    0,
     VT_INT,
     VT_INT,
     VT_INT,
@@ -87,7 +90,7 @@ const int reg_types[NB_REGS] = {
     VT_DOUBLE,
 };
 
-#define ALIGNMENT_MASK (-8)
+#define ALIGNMENT_MASK (-MAX_ALIGN)
 
 #define log(...) { \
     int _log_i; \
@@ -184,8 +187,9 @@ void gfunc_prolog(CType *func_type) {
     if (t && (func_vt.t & VT_BTYPE) != VT_STRUCT)
         printf("(result %s)", lookup_type(t));
     printf("\n");
-    for (int i = 0; i < NB_REGS; i++)
-        printf("(local $r%d %s)\n", i, lookup_type(reg_types[i]));
+    for (int i = 1; i < NB_REGS; i++)
+        printf("(local $r%d %s) ", i, lookup_type(reg_types[i]));
+    printf("\n");
 }
 
 void gsv(SValue *sv) {
@@ -202,7 +206,7 @@ void gsv(SValue *sv) {
             printf("(i32.add (get_global $%s) (i32.const %d) (; %s ;))",
                 section, esym->st_value, get_tok_str(sv->sym->v, NULL));
         } else {
-            printf("%s.const %d", lookup_type(ft), fc);
+            printf("(%s.const %d)", lookup_type(ft), fc);
         }
     } else if (v == VT_LOCAL) {
         if (fc >= 0) {
@@ -211,80 +215,60 @@ void gsv(SValue *sv) {
             printf("(i32.add (get_global $SP) (i32.const %d))", fc);
         }
     } else {
-        printf("get_local $r%d", v);
+        printf("(get_local $r%d)", v);
     }
-    printf("\n");
 }
 
-void loads(SValue *sv) {
+void load(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
-    log("loads r=%#x v=%#x fc=%d ft=%d", sv->r, v, fc, ft);
+    log("load %d r=%#x v=%#x fc=%d ft=%d", r, sv->r, v, fc, ft);
 
     if (v == VT_JMP || v == VT_JMPI) {
         if ((fc & 0xff) - BLOCK_VT_JMP != v - VT_JMP)
             tcc_error("block doesn't support VT_JMP/I");
         gsym(fc);
+        if (r > 0) printf("set_local $r%d\n", r);
         return;
     }
 
+    if (r > 0) printf("(set_local $r%d ", r);
     if (v == VT_CMP) {
-        printf("(%s.%s (get_local $r%d) (get_local $r%d))\n",
+        printf("(%s.%s (get_local $r%d) (get_local $r%d))",
             lookup_type(tCMP), lookup_op(fc), aCMP, bCMP);
-        return;
-    }
-
-    if (sv->r == (VT_LVAL | VT_LOCAL) && fc >= 0) {
-        printf("get_local $p%d\n", fc);
-        return;
-    }
-
-    gsv(sv);
-
-    if (sv->r & VT_LVAL) {
+    } else if (sv->r == (VT_LVAL | VT_LOCAL) && fc >= 0) {
+        printf("(get_local $p%d)", fc);
+    } else if (sv->r & VT_LVAL) {
         char s = (ft & VT_UNSIGNED) ? 'u' : 's';
+        printf("(");
         switch (ft & VT_BTYPE) {
             case VT_BYTE: printf("i32.load8_%c", s); break;
             case VT_SHORT: printf("i32.load16_%c", s); break;
             default: printf("%s.load", lookup_type(ft));
         }
-        printf("\n");
+        printf(" ");
+        gsv(sv);
+        printf(")");
+    } else {
+        gsv(sv);
     }
-}
-
-void load(int r, SValue *sv) {
-    log("load %d", r);
-    loads(sv);
-    printf("set_local $r%d\n", r);
+    if (r > 0) printf(")\n");
 }
 
 void store(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
     log("store r=%d v=%#x fc=%d ft=%d", r, v, fc, ft);
-    gsv(sv);
-    printf("get_local $r%d\n", r);
+    printf("(");
     switch (ft & VT_BTYPE) {
         case VT_BYTE: printf("i32.store8"); break;
         case VT_SHORT: printf("i32.store16"); break;
         default: printf("%s.store", lookup_type(ft));
     }
-    printf("\n");
+    printf(" ");
+    gsv(sv);
+    printf(" (get_local $r%d))\n", r);
 }
 
-int gvt(int t) {
-    switch (t & VT_BTYPE) {
-        case VT_PTR:
-        case VT_BYTE:
-        case VT_SHORT:
-        case VT_INT:    return gv(RC_INT);
-        case VT_LLONG:  return gv(RC_LLONG);
-        case VT_FLOAT:  return gv(RC_FLOAT);
-        case VT_LDOUBLE:
-        case VT_DOUBLE: return gv(RC_DOUBLE);
-        default: tcc_error("gvt(%s)", lookup_type(t));
-    }
-}
-
-int greturn(int t) {
+int lookup_return(int t) {
     switch (t & VT_BTYPE) {
         case VT_PTR:
         case VT_BYTE:
@@ -313,13 +297,15 @@ void gfunc_call(int nb_args) {
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             tcc_error("structures passed as value not handled yet");
         } else {
-            printf("get_local $r%d\n", gvt(vtop->type.t));
+            gv(RC_INLINE);
+            printf(" ;; push arg\n");
         }
         vtop--;
     }
 
     if (indirect) r = gv(RC_INT);
     printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n", local);
+    if (lookup_return(t) > 0) printf("(set_local $r%d ", lookup_return(t));
     if (indirect) {
         if (return_sym->f.func_type != FUNC_NEW)
             tcc_error("unsupported function prototype for indirect call");
@@ -327,13 +313,12 @@ void gfunc_call(int nb_args) {
         for (Sym *cur = return_sym->next; cur; cur = cur->next)
             printf("(param %s) ", lookup_type(cur->type.t));
         if (t) printf("(result %s) ", lookup_type(t));
-        printf("(get_local $r%d))\n", r);
+        printf("(get_local $r%d))", r);
     } else {
         const char* name = get_tok_str(vtop->sym->v, NULL);
-        printf("call $%s\n", name);
+        printf("(call $%s)", name);
     }
-    r = greturn(t);
-    if (r >= 0) printf("set_local $r%d\n", r);
+    if (lookup_return(t) > 0) printf(")\n");
     printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n", local);
     vtop--;
 }
@@ -343,9 +328,8 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
     return 0;
 }
 
-int num_blocks = 0;
-
 ST_FUNC int gblock(int t) {
+    static int num_blocks = 0;
     int k = t & 0xff, i = t >> 8;
     if (!i) i = ++num_blocks;
     if (k == BLOCK_IF) {
@@ -395,7 +379,7 @@ void gsym(int t) {
 int gjmp(int t) {
     int k = t & 0xff, i = t >> 8;
     if (k == BLOCK_RETURN) {
-        int r = greturn(func_vt.t);
+        int r = lookup_return(func_vt.t);
         if (r >= 0) printf("get_local $r%d\n", r);
         printf("return\n");
     } else if (i == 0) {
@@ -424,7 +408,8 @@ int gtst(int inv, int t) {
     } else if (v == VT_CMP || v == VT_JMP || v == VT_JMPI) {
         vtop->c.i ^= inv;
         if (k == BLOCK_IF) {
-            printf("get_local $r%d\n", gv(RC_INT));
+            gv(RC_INLINE);
+            printf("\n");
             t = gblock(t);
         } else {
             int r = gv(RC_INT);
@@ -477,10 +462,11 @@ void gen_opf(int op) {
 }
 
 void gen_cvt(int t) {
-    int s = vtop->type.t, r = gvt(s);
+    int s = vtop->type.t, r = lookup_return(t);
     char us = (s & VT_UNSIGNED) ? 'u' : 's';
     char ut = (t & VT_UNSIGNED) ? 'u' : 's';
-    printf("get_local $r%d\n", r);
+    save_reg(r);
+    printf("(set_local $r%d (", r);
     if (s == VT_INT && t == VT_LLONG) {
         printf("i64.extend_i32_%c", us);
     } else if (s == VT_LLONG && t == VT_INT) {
@@ -496,10 +482,9 @@ void gen_cvt(int t) {
     } else {
         tcc_error("can't cast %s to %s", lookup_type(s), lookup_type(t));
     }
-    printf("\n");
-    r = greturn(t);
-    save_reg(r);
-    printf("set_local $r%d\n", r);
+    printf(" ");
+    gv(RC_INLINE);
+    printf("))\n");
     vtop->r = r;
     vtop->type.t = t;
 }
@@ -529,9 +514,9 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 }
 
 void gfunc_epilog(void) {
-    int r = greturn(func_vt.t);
+    int r = lookup_return(func_vt.t);
     if (r >= 0) printf("get_local $r%d\n", r);
-    printf(")\n");
+    printf(")\n\n");
     ind++;
 }
 
