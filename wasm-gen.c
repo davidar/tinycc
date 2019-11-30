@@ -102,6 +102,7 @@ const int reg_types[NB_REGS] = {
 }
 
 int aCMP, bCMP, tCMP;
+int nlabels;
 
 /******************************************************/
 
@@ -163,6 +164,7 @@ void gfunc_prolog(CType *func_type) {
     func_vt = sym->type;
     func_var = (sym->c == FUNC_ELLIPSIS);
     loc = 0;
+    nlabels = 0;
     log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
     printf("(elem (i32.const %d) $%s)\n", func_ind, funcname);
 
@@ -189,7 +191,8 @@ void gfunc_prolog(CType *func_type) {
     printf("\n");
     for (int i = 1; i < NB_REGS; i++)
         printf("(local $r%d %s) ", i, lookup_type(reg_types[i]));
-    printf("\n");
+    printf("(local $goto i32) (local $exe_label i32)\n");
+    printf("(set_local $exe_label (i32.const 0))\n");
 }
 
 void gsv(SValue *sv) {
@@ -345,6 +348,10 @@ ST_FUNC int gblock(int t) {
         printf("get_local $r%d\n", r);
         printf("if $C%d\n", i);
         vtop--;
+    } else if (k == BLOCK_GOTO) {
+        printf("(tee_local $exe_label (i32.or (get_local $exe_label) "
+            "(i32.eq (get_local $goto) (i32.const %d))))\n", i);
+        printf("if $G%d\n", i);
     } else {
         printf("block $B%d", i);
         if (k == BLOCK_VT_JMP || k == BLOCK_VT_JMPI) {
@@ -357,6 +364,10 @@ ST_FUNC int gblock(int t) {
     return (i << 8) | (k & 0xff);
 }
 
+ST_FUNC int glabel(void) {
+    return (++nlabels << 8) | BLOCK_GOTO;
+}
+
 void gsym(int t) {
     int k = t & 0xff, i = t >> 8;
     if (i == 0) {
@@ -367,6 +378,8 @@ void gsym(int t) {
         printf("end $S%d\n", i);
     } else if (k == BLOCK_SWITCH_CASE) {
         printf("end $C%d\n", i);
+    } else if (k == BLOCK_GOTO) {
+        printf("end $G%d\n", i);
     } else {
         if (k == BLOCK_VT_JMP || k == BLOCK_VT_JMPI)
             printf("i32.eqz\n");
@@ -390,14 +403,13 @@ int gjmp(int t) {
         printf("br $S%d\n", i);
     } else if (k == BLOCK_LOOP_CONTINUE) {
         printf("br $L%d\n", i);
+    } else if (k == BLOCK_GOTO) {
+        printf("(set_local $goto (i32.const %d))\n", i);
+        gjmp(rsym);
     } else {
         printf("br $B%d\n", i);
     }
     return t;
-}
-
-void gjmp_addr(int a) {
-    tcc_error("gjmp_addr");
 }
 
 int gtst(int inv, int t) {
@@ -493,10 +505,6 @@ void gen_cvt_itoi(int t) { gen_cvt(t); }
 void gen_cvt_itof(int t) { gen_cvt(t); }
 void gen_cvt_ftoi(int t) { gen_cvt(t); }
 void gen_cvt_ftof(int t) { gen_cvt(t); }
-
-void ggoto(void) {
-    tcc_error("computed goto");
-}
 
 /* Save the stack pointer onto the stack and return the location of its address */
 ST_FUNC void gen_vla_sp_save(int addr) {

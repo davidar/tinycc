@@ -1482,6 +1482,7 @@ enum {
     BLOCK_LOOP_CONTINUE = 7,
     BLOCK_SWITCH = 8,
     BLOCK_SWITCH_CASE = 9,
+    BLOCK_GOTO = 10,
 };
 
 ST_DATA const int reg_classes[NB_REGS];
@@ -1494,8 +1495,8 @@ ST_FUNC void gfunc_call(int nb_args);
 ST_FUNC void gfunc_prolog(CType *func_type);
 ST_FUNC void gfunc_epilog(void);
 ST_FUNC int gblock(int t);
+ST_FUNC int glabel(void);
 ST_FUNC int gjmp(int t);
-ST_FUNC void gjmp_addr(int a);
 ST_FUNC int gtst(int inv, int t);
 #if defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64
 ST_FUNC void gtst_addr(int inv, int a);
@@ -1506,7 +1507,6 @@ ST_FUNC void gen_opi(int op);
 ST_FUNC void gen_opf(int op);
 ST_FUNC void gen_cvt_ftoi(int t);
 ST_FUNC void gen_cvt_ftof(int t);
-ST_FUNC void ggoto(void);
 #if !defined TCC_TARGET_C67 && !defined TCC_TARGET_WASM
 ST_FUNC void o(unsigned int c);
 #endif

@@ -12,13 +12,18 @@ struct s f(long long i) {
     s.f += .5;
     s.f += i;
     switch(i) {
-        case 1: puts("foo");
-        case 2: puts("bar"); break;
-        default: puts("baz");
+        case 1: goto label1;
+        case 2: goto label2;
+        default: puts("baz\n");
     }
-    puts("\n\n");
     return s;
     puts("Fail\n");
+label1:
+    puts("foo1\n");
+    puts("foo2\n");
+label2:
+    puts("bar\n");
+    return s;
 }
 
 int main(void) {

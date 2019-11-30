@@ -5942,7 +5942,7 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(';');
         /* jump unless last stmt in top-level block */
         if (tok != '}' || local_scope != 1)
-            rsym = gjmp(rsym);
+            gjmp(BLOCK_RETURN);
 	nocode_wanted |= 0x20000000;
     } else if (tok == TOK_BREAK) {
         /* compute jump */
@@ -6063,32 +6063,27 @@ static void block(int *bsym, int *csym, int is_expr)
     if (tok == TOK_DEFAULT) {
         next();
         skip(':');
-        is_expr = 0;
-        goto block_after_label;
+        nocode_wanted &= ~0x20000000;
+        if (tok == '}') {
+            tcc_warning("deprecated use of label at end of compound statement");
+        } else {
+            block(bsym, csym, 0);
+        }
     } else
     if (tok == TOK_GOTO) {
         next();
         if (tok == '*' && gnu_ext) {
-            /* computed goto */
-            next();
-            gexpr();
-            if ((vtop->type.t & VT_BTYPE) != VT_PTR)
-                expect("pointer");
-            ggoto();
+            tcc_error("computed goto not supported");
         } else if (tok >= TOK_UIDENT) {
+            if (!rsym) tcc_error("last goto must be before first label");
             s = label_find(tok);
             /* put forward definition if needed */
             if (!s) {
                 s = label_push(&global_label_stack, tok, LABEL_FORWARD);
-            } else {
-                if (s->r == LABEL_DECLARED)
-                    s->r = LABEL_FORWARD;
+                s->jnext = glabel();
             }
             vla_sp_restore_root();
-	    if (s->r & LABEL_FORWARD)
-                s->jnext = gjmp(s->jnext);
-            else
-                gjmp_addr(s->jnext);
+            gjmp(s->jnext);
             next();
         } else {
             expect("label identifier");
@@ -6101,27 +6096,34 @@ static void block(int *bsym, int *csym, int is_expr)
         if (b) {
             /* label case */
 	    next();
+            if (rsym) {
+                /* first label */
+                gsym(rsym);
+                rsym = 0;
+            }
             s = label_find(b);
             if (s) {
                 if (s->r == LABEL_DEFINED)
                     tcc_error("duplicate label '%s'", get_tok_str(s->v, NULL));
-                gsym(s->jnext);
+                a = gblock(s->jnext);
                 s->r = LABEL_DEFINED;
             } else {
-                s = label_push(&global_label_stack, b, LABEL_DEFINED);
+                tcc_error("label defined before use, only forward goto supported");
             }
-            s->jnext = ind;
             vla_sp_restore();
-            /* we accept this, but it is a mistake */
-        block_after_label:
-	    nocode_wanted &= ~0x20000000;
+            nocode_wanted &= ~0x20000000;
             if (tok == '}') {
                 tcc_warning("deprecated use of label at end of compound statement");
             } else {
                 if (is_expr)
                     vpop();
-                block(bsym, csym, is_expr);
+                do {
+                    block(bsym, csym, is_expr);
+                    b = is_label();
+                } while (!b && tok != '}');
+                if (b) unget_tok(b);
             }
+            gsym(a);
         } else {
             /* expression case */
             if (tok != ';') {
@@ -6974,7 +6976,7 @@ static void gen_function(Sym *sym)
     local_scope = 1; /* for function parameters */
     gfunc_prolog(&sym->type);
     local_scope = 0;
-    rsym = BLOCK_RETURN;
+    rsym = gblock(0);
     block(NULL, NULL, 0);
     nocode_wanted = 0;
     gsym(rsym);
