@@ -257,9 +257,6 @@ ST_FUNC int tccgen_compile(TCCState *s1)
 #ifdef TCC_TARGET_ARM
     arm_init(s1);
 #endif
-#ifdef TCC_TARGET_WASM
-    wasm_init();
-#endif
 
 #ifdef INC_DEBUG
     printf("%s: **** new file\n", file->filename);
@@ -272,9 +269,6 @@ ST_FUNC int tccgen_compile(TCCState *s1)
     check_vstack();
     /* end of translation unit info */
     tcc_debug_end(s1);
-#ifdef TCC_TARGET_WASM
-    wasm_end();
-#endif
     return 0;
 }
 

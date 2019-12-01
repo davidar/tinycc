@@ -317,6 +317,9 @@ redo:
         s->dflag |= t ? 32 : 0, s->run_test = ++t, n = s->nb_files;
 
     /* compile or add each files or library */
+#ifdef TCC_TARGET_WASM
+    wasm_init();
+#endif
     for (first_file = NULL, ret = 0;;) {
         struct filespec *f = s->files[s->nb_files - n];
         s->filetype = f->type;
@@ -338,6 +341,9 @@ redo:
             || (s->output_type == TCC_OUTPUT_OBJ && !s->option_r))
             break;
     }
+#ifdef TCC_TARGET_WASM
+    wasm_end();
+#endif
 
     if (s->run_test) {
         t = 0;
