@@ -810,6 +810,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     tcc_define_symbol(s, "__aarch64__", NULL);
 #elif defined TCC_TARGET_C67
     tcc_define_symbol(s, "__C67__", NULL);
+#elif defined TCC_TARGET_WASM
+    tcc_define_symbol(s, "__wasm__", NULL);
+    tcc_define_symbol(s, "__wasm32__", NULL);
 #endif
 
 #ifdef TCC_TARGET_PE

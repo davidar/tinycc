@@ -1,4 +1,5 @@
 #include <wasi.h>
+#include <stdarg.h>
 
 struct s {
     int i;
@@ -26,6 +27,16 @@ label2:
     return s;
 }
 
+void puts_many(int count, const char *s, ...) {
+    va_list args;
+    va_start(args, s);
+    for (int i = 0; i < count; i++) {
+        puts(s);
+        puts(va_arg(args, const char *));
+    }
+    va_end(args);
+}
+
 int main(void) {
     int (*print)(const char *s);
     print = &puts;
@@ -40,5 +51,6 @@ int main(void) {
         continue;
         puts("Fail\n");
     } while (0);
+    puts_many(2, "foo: ", "bar\n", "baz!\n");
     return 0;
 }

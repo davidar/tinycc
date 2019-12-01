@@ -162,15 +162,13 @@ void gfunc_prolog(CType *func_type) {
     int addr = 0, t;
     Sym *sym = func_type->ref;
     func_vt = sym->type;
-    func_var = (sym->c == FUNC_ELLIPSIS);
+    func_var = 0;
     loc = 0;
     nlabels = 0;
     log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
     printf("(elem (i32.const %d) $%s)\n", func_ind, funcname);
 
     printf("(func $%s (export \"%s\") ", funcname, funcname);
-    if (sym->f.func_type != FUNC_NEW)
-        tcc_error("unsupported function prototype");
 
     if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
         func_vc = addr++;
@@ -185,8 +183,13 @@ void gfunc_prolog(CType *func_type) {
         addr++;
     }
 
+    if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
+        func_var = addr++;
+        printf("(param $p%d %s) ", func_var, lookup_type(VT_PTR));
+    }
+
     t = func_vt.t;
-    if (t && (func_vt.t & VT_BTYPE) != VT_STRUCT)
+    if (t != VT_VOID && (t & VT_BTYPE) != VT_STRUCT)
         printf("(result %s)", lookup_type(t));
     printf("\n");
     for (int i = 1; i < NB_REGS; i++)
@@ -224,7 +227,7 @@ void gsv(SValue *sv) {
 
 void load(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
-    log("load %d r=%#x v=%#x fc=%d ft=%d", r, sv->r, v, fc, ft);
+    log("load %d r=%#x v=%#x fc=%d ft=%#x", r, sv->r, v, fc, ft);
 
     if (v == VT_JMP || v == VT_JMPI) {
         if ((fc & 0xff) - BLOCK_VT_JMP != v - VT_JMP)
@@ -259,7 +262,7 @@ void load(int r, SValue *sv) {
 
 void store(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
-    log("store r=%d v=%#x fc=%d ft=%d", r, v, fc, ft);
+    log("store %d r=%#x v=%#x fc=%d ft=%#x", r, sv->r, v, fc, ft);
     printf("(");
     switch (ft & VT_BTYPE) {
         case VT_BYTE: printf("i32.store8"); break;
@@ -290,12 +293,17 @@ int lookup_return(int t) {
 void gfunc_call(int nb_args) {
     Sym *return_sym = vtop[-nb_args].type.ref;
     int t = return_sym->type.t;
-    int local = loc & ALIGNMENT_MASK;
     int indirect = ((vtop[-nb_args].r & (VT_VALMASK | VT_LVAL)) != VT_CONST);
     int r = -1;
-    log("gfunc_call nb_args=%d", nb_args);
+    int nb_fixed = 0;
+    if (return_sym->f.func_type == FUNC_ELLIPSIS) {
+        for (Sym *cur = return_sym->next; cur; cur = cur->next) nb_fixed++;
+    } else {
+        nb_fixed = nb_args;
+    }
+    log("gfunc_call nb_args=%d nb_fixed=%d", nb_args, nb_fixed);
 
-    for (int i = 0; i < nb_args; i++) {
+    for (int i = 0; i < nb_fixed; i++) {
         vrotb(nb_args - i);
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             tcc_error("structures passed as value not handled yet");
@@ -306,8 +314,33 @@ void gfunc_call(int nb_args) {
         vtop--;
     }
 
+    for (int i = nb_fixed; i < nb_args; i++) {
+        int size, align;
+        SValue sv;
+        convert_parameter_type(&vtop->type);
+        size = type_size(&vtop->type, &align);
+        if (size < 4) size = align = 4;
+        loc = (loc - size) & -align;
+        sv.type.t = vtop->type.t;
+        sv.r = VT_LOCAL | VT_LVAL;
+        sv.c.i = loc;
+
+        printf("(%s.store ", lookup_type(sv.type.t));
+        gsv(&sv);
+        printf(" ");
+        gv(RC_INLINE);
+        printf(")\n");
+        vtop--;
+
+        if (i == nb_args - 1) {
+            gsv(&sv);
+            printf(" ;; varargs\n");
+        }
+    }
+
     if (indirect) r = gv(RC_INT);
-    printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n", local);
+    printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n",
+        loc & ALIGNMENT_MASK);
     if (lookup_return(t) > 0) printf("(set_local $r%d ", lookup_return(t));
     if (indirect) {
         if (return_sym->f.func_type != FUNC_NEW)
@@ -321,8 +354,10 @@ void gfunc_call(int nb_args) {
         const char* name = get_tok_str(vtop->sym->v, NULL);
         printf("(call $%s)", name);
     }
-    if (lookup_return(t) > 0) printf(")\n");
-    printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n", local);
+    if (lookup_return(t) > 0) printf(")");
+    printf("\n");
+    printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n",
+        loc & ALIGNMENT_MASK);
     vtop--;
 }
 

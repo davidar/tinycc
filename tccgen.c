@@ -4944,6 +4944,13 @@ ST_FUNC void unary(void)
         break;
     }
 #endif
+
+#ifdef TCC_TARGET_WASM
+    case TOK_builtin_va_start:
+        next();
+        vseti(VT_LVAL | VT_LOCAL, func_var);
+        break;
+#endif
     /* pre operations */
     case TOK_INC:
     case TOK_DEC:

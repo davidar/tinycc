@@ -144,7 +144,7 @@
      DEF(TOK_builtin_return_address, "__builtin_return_address")
      DEF(TOK_builtin_expect, "__builtin_expect")
      /*DEF(TOK_builtin_va_list, "__builtin_va_list")*/
-#if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64
+#if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64 || defined TCC_TARGET_WASM
      DEF(TOK_builtin_va_start, "__builtin_va_start")
 #elif defined TCC_TARGET_X86_64
      DEF(TOK_builtin_va_arg_types, "__builtin_va_arg_types")
