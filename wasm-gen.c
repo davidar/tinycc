@@ -158,39 +158,43 @@ void wasm_init(void) {
     printf("(memory (export \"memory\") 2)\n");
 }
 
+void gfunc_sig(Sym *return_sym, int decl) {
+    int addr = 0, t = return_sym->type.t;
+    if (decl) func_vt = return_sym->type;
+
+    if ((t & VT_BTYPE) == VT_STRUCT) {
+        printf("(param ");
+        if (decl) printf("$p%d ", func_vc = addr++);
+        printf("%s) ", lookup_type(VT_PTR));
+    }
+
+    for (Sym *cur = return_sym->next; cur; cur = cur->next) {
+        int s = cur->type.t;
+        printf("(param ");
+        if (decl) {
+            sym_push(cur->v & ~SYM_FIELD, &cur->type, VT_LOCAL | lvalue_type(s), addr);
+            printf("$p%d ", addr++);
+        }
+        printf("%s) ", lookup_type(s));
+    }
+
+    if (return_sym->f.func_type == FUNC_ELLIPSIS) {
+        printf("(param ");
+        if (decl) printf("$p%d ", func_var = addr++);
+        printf("%s) ", lookup_type(VT_PTR));
+    }
+
+    if (t != VT_VOID && (t & VT_BTYPE) != VT_STRUCT) {
+        printf("(result %s) ", lookup_type(t));
+    }
+}
+
 void gfunc_prolog(CType *func_type) {
-    int addr = 0, t;
-    Sym *sym = func_type->ref;
-    func_vt = sym->type;
-    func_var = 0;
-    loc = 0;
-    nlabels = 0;
+    loc = nlabels = 0;
     log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
     printf("(elem (i32.const %d) $%s)\n", func_ind, funcname);
-
     printf("(func $%s (export \"%s\") ", funcname, funcname);
-
-    if ((func_vt.t & VT_BTYPE) == VT_STRUCT) {
-        func_vc = addr++;
-        printf("(param $p%d %s) ", func_vc, lookup_type(VT_PTR));
-    }
-
-    while ((sym = sym->next) != NULL) {
-        t = sym->type.t;
-        sym_push(sym->v & ~SYM_FIELD, &sym->type,
-                 VT_LOCAL | lvalue_type(sym->type.t), addr);
-        printf("(param $p%d %s) ", addr, lookup_type(t));
-        addr++;
-    }
-
-    if (func_type->ref->f.func_type == FUNC_ELLIPSIS) {
-        func_var = addr++;
-        printf("(param $p%d %s) ", func_var, lookup_type(VT_PTR));
-    }
-
-    t = func_vt.t;
-    if (t != VT_VOID && (t & VT_BTYPE) != VT_STRUCT)
-        printf("(result %s)", lookup_type(t));
+    gfunc_sig(func_type->ref, 1);
     printf("\n");
     for (int i = 1; i < NB_REGS; i++)
         printf("(local $r%d %s) ", i, lookup_type(reg_types[i]));
@@ -346,9 +350,7 @@ void gfunc_call(int nb_args) {
         if (return_sym->f.func_type != FUNC_NEW)
             tcc_error("unsupported function prototype for indirect call");
         printf("(call_indirect ");
-        for (Sym *cur = return_sym->next; cur; cur = cur->next)
-            printf("(param %s) ", lookup_type(cur->type.t));
-        if (t) printf("(result %s) ", lookup_type(t));
+        gfunc_sig(return_sym, 0);
         printf("(get_local $r%d))", r);
     } else {
         const char* name = get_tok_str(vtop->sym->v, NULL);
