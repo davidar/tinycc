@@ -421,6 +421,10 @@ ST_FUNC void put_extern_sym(Sym *sym, Section *section,
 {
     int sh_num = section ? section->sh_num : SHN_UNDEF;
     put_extern_sym2(sym, sh_num, value, size, 1);
+    if (!sym->st_value) {
+        sym->st_value = value;
+        gglobal(sym);
+    }
 }
 
 /* add a new relocation entry to symbol 'sym' in section 's' */
@@ -939,6 +943,7 @@ static Sym *external_sym(int v, CType *type, int r, AttributeDef *ad)
         }
         patch_storage(s, ad, type);
     }
+    gglobal(s);
     return s;
 }
 
@@ -6995,7 +7000,6 @@ static void gen_function(Sym *sym)
     sym_pop(&local_stack, NULL, 0);
     /* end of function */
     /* patch symbol size */
-    elfsym(sym)->st_value = func_ind;
     elfsym(sym)->st_size = ind - func_ind;
     tcc_debug_funcend(tcc_state, ind - func_ind);
     /* It's better to crash than to generate wrong code */

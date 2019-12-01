@@ -493,6 +493,7 @@ typedef struct Sym {
     };
     struct Sym *prev; /* prev symbol in stack */
     struct Sym *prev_tok; /* previous symbol for this token */
+    int st_value;
 } Sym;
 
 /* section definition */
@@ -1592,6 +1593,7 @@ ST_FUNC void gen_clear_cache(void);
 #ifdef TCC_TARGET_WASM
 void gen_opl(int op);
 void gen_cvt_itoi(int t);
+void gglobal(Sym *sym);
 void wasm_init(void);
 void wasm_end(void);
 #endif

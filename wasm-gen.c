@@ -102,7 +102,7 @@ const int reg_types[NB_REGS] = {
 }
 
 int aCMP, bCMP, tCMP;
-int nlabels;
+int nlabels = 0, nfuncs = 0;
 
 /******************************************************/
 
@@ -189,10 +189,18 @@ void gfunc_sig(Sym *return_sym, int decl) {
     }
 }
 
+void gglobal(Sym *sym) {
+    const char *name = get_tok_str(sym->v, NULL);
+    log("gglobal %s", name);
+    if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
+        sym->st_value = ++nfuncs;
+        printf("(elem (i32.const %d) $%s)\n", sym->st_value - 1, name);
+    }
+}
+
 void gfunc_prolog(CType *func_type) {
     loc = nlabels = 0;
     log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
-    printf("(elem (i32.const %d) $%s)\n", func_ind, funcname);
     printf("(func $%s (export \"%s\") ", funcname, funcname);
     gfunc_sig(func_type->ref, 1);
     printf("\n");
@@ -206,15 +214,14 @@ void gsv(SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
     if (v == VT_CONST) {
         if (sv->r & VT_SYM) {
-            ElfSym *esym = elfsym(sv->sym);
-            const char *section;
-            switch(esym->st_shndx) {
-                case 1: section = "FUNC"; break;
-                case 2: section = "DATA"; break;
-                default: tcc_error("unknown section index %d", esym->st_shndx);
+            const char *name = get_tok_str(sv->sym->v, NULL);
+            if ((sv->sym->type.t & VT_BTYPE) == VT_FUNC) {
+                printf("(i32.add (get_global $FUNC) (i32.const %d) (; %s ;))",
+                    sv->sym->st_value - 1, name);
+            } else {
+                printf("(i32.add (get_global $DATA) (i32.const %d) (; %s ;))",
+                    sv->sym->st_value, name);
             }
-            printf("(i32.add (get_global $%s) (i32.const %d) (; %s ;))",
-                section, esym->st_value, get_tok_str(sv->sym->v, NULL));
         } else {
             printf("(%s.const %d)", lookup_type(ft), fc);
         }
@@ -562,7 +569,6 @@ void gfunc_epilog(void) {
     int r = lookup_return(func_vt.t);
     if (r >= 0) printf("get_local $r%d\n", r);
     printf(")\n\n");
-    ind++;
 }
 
 void wasm_end(void) {
@@ -578,8 +584,7 @@ void wasm_end(void) {
     printf("\")\n");
 
     printf("(global $FUNC (export \"__table_base\") i32 (i32.const 0))\n");
-    printf("(table (export \"__indirect_function_table\") %lu anyfunc)\n",
-        text_section->data_offset);
+    printf("(table (export \"__indirect_function_table\") %d anyfunc)\n", nfuncs);
     printf(")\n");
     exit(0);
 }
