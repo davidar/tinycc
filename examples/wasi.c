@@ -37,12 +37,13 @@ void puts_many(int count, const char *s, ...) {
     va_end(args);
 }
 
+int (*print)(const char *s) = puts;
+const char *hello = "Hello, world!\n";
+
 int main(void) {
-    int (*print)(const char *s);
-    print = &puts;
     for (int i = 0; i < 5; i++) {
         if (!i) puts("Begin\n");
-        print((i < 2) ? "Hello, world!\n" : "...\n");
+        print((i < 2) ? hello : "...\n");
         if ((int) f(i).f != 42 + i)
             puts("Fail\n");
     }

@@ -434,6 +434,7 @@ ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
         if (0 == sym->c)
             put_extern_sym(sym, NULL, 0, 0);
         c = sym->c;
+        if (s == data_section) gdata(sym, offset);
     }
 
     /* now we can add ELF relocation info */
@@ -6865,10 +6866,7 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* allocate symbol in corresponding section */
         sec = ad->section;
         if (!sec) {
-            if (has_init)
                 sec = data_section;
-            else if (tcc_state->nocommon)
-                sec = bss_section;
         }
 
         if (sec) {

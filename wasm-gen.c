@@ -156,6 +156,7 @@ void wasm_init(void) {
     printf("(import \"wasi_unstable\" \"fd_write\"");
     printf(" (func $__wasi_fd_write (param i32 i32 i32 i32) (result i32)))\n");
     printf("(memory (export \"memory\") 2)\n");
+    section_reserve(data_section, MAX_ALIGN);
 }
 
 void gfunc_sig(Sym *return_sym, int decl) {
@@ -191,11 +192,18 @@ void gfunc_sig(Sym *return_sym, int decl) {
 
 void gglobal(Sym *sym) {
     const char *name = get_tok_str(sym->v, NULL);
-    log("gglobal %s", name);
     if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
-        sym->st_value = ++nfuncs;
-        printf("(elem (i32.const %d) $%s)\n", sym->st_value - 1, name);
+        sym->st_value = ~(nfuncs++);
+        printf("(elem (i32.const %d) $%s)\n", ~(sym->st_value), name);
     }
+    log("gglobal %s = %d", name, sym->st_value);
+}
+
+void gdata(Sym *sym, int offset) {
+    int p = sym->st_value;
+    if (p < 0) p = ~p;
+    log("gdata [%d] = %d", offset, p);
+    write32le(data_section->data + offset, p);
 }
 
 void gfunc_prolog(CType *func_type) {
@@ -215,13 +223,9 @@ void gsv(SValue *sv) {
     if (v == VT_CONST) {
         if (sv->r & VT_SYM) {
             const char *name = get_tok_str(sv->sym->v, NULL);
-            if ((sv->sym->type.t & VT_BTYPE) == VT_FUNC) {
-                printf("(i32.add (get_global $FUNC) (i32.const %d) (; %s ;))",
-                    sv->sym->st_value - 1, name);
-            } else {
-                printf("(i32.add (get_global $DATA) (i32.const %d) (; %s ;))",
-                    sv->sym->st_value, name);
-            }
+            int p = sv->sym->st_value;
+            if (p < 0) p = ~p;
+            printf("(i32.const %d) (; %s ;)", p, name);
         } else {
             printf("(%s.const %d)", lookup_type(ft), fc);
         }
@@ -572,18 +576,14 @@ void gfunc_epilog(void) {
 }
 
 void wasm_end(void) {
-    int offset = 16, len = data_section->data_offset,
-        sp = (offset + len + (1 << 16)) & ALIGNMENT_MASK;
-    printf("(global $DATA (export \"__memory_base\") i32 (i32.const %d))\n", offset);
-    printf("(global (export \"__data_end\") i32 (i32.const %d))\n", offset + len);
+    int len = data_section->data_offset, sp = (len + (1 << 16)) & ALIGNMENT_MASK;
+    printf("(global (export \"__data_end\") i32 (i32.const %d))\n", len);
     printf("(global (export \"__heap_base\") i32 (i32.const %d))\n", sp);
     printf("(global $SP (export \"__stack_pointer\") (mut i32) (i32.const %d))\n", sp);
-    printf("(data (i32.const %d) \"", offset);
+    printf("(data (i32.const 0) \"");
     for (int i = 0; i < len; i++)
         printf("\\%02x", data_section->data[i]);
     printf("\")\n");
-
-    printf("(global $FUNC (export \"__table_base\") i32 (i32.const 0))\n");
     printf("(table (export \"__indirect_function_table\") %d anyfunc)\n", nfuncs);
     printf(")\n");
     exit(0);

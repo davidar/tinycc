@@ -1594,6 +1594,7 @@ ST_FUNC void gen_clear_cache(void);
 void gen_opl(int op);
 void gen_cvt_itoi(int t);
 void gglobal(Sym *sym);
+void gdata(Sym *sym, int offset);
 void wasm_init(void);
 void wasm_end(void);
 #endif
