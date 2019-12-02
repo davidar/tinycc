@@ -279,13 +279,17 @@ void store(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
     log("store %d r=%#x v=%#x fc=%d ft=%#x", r, sv->r, v, fc, ft);
     printf("(");
-    switch (ft & VT_BTYPE) {
-        case VT_BYTE: printf("i32.store8"); break;
-        case VT_SHORT: printf("i32.store16"); break;
-        default: printf("%s.store", lookup_type(ft));
+    if (sv->r == (VT_LVAL | VT_LOCAL) && fc >= 0) {
+        printf("set_local $p%d", fc);
+    } else {
+        switch (ft & VT_BTYPE) {
+            case VT_BYTE: printf("i32.store8"); break;
+            case VT_SHORT: printf("i32.store16"); break;
+            default: printf("%s.store", lookup_type(ft));
+        }
+        printf(" ");
+        gsv(sv);
     }
-    printf(" ");
-    gsv(sv);
     printf(" (get_local $r%d))\n", r);
 }
 

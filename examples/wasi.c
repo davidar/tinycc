@@ -12,6 +12,7 @@ struct s f(long long i) {
     s.f = 42;
     s.f += .5;
     s.f += i;
+    if (i == 3) i = 2;
     switch(i) {
         case 1: goto label1;
         case 2: goto label2;
