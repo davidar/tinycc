@@ -813,6 +813,7 @@ LIBTCCAPI TCCState *tcc_new(void)
 #elif defined TCC_TARGET_WASM
     tcc_define_symbol(s, "__wasm__", NULL);
     tcc_define_symbol(s, "__wasm32__", NULL);
+    tcc_define_symbol(s, "__wasi__", NULL);
 #endif
 
 #ifdef TCC_TARGET_PE

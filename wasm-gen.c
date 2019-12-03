@@ -140,6 +140,7 @@ const char *lookup_type(int t) {
     switch(t & VT_BTYPE) {
         case VT_PTR:
         case VT_FUNC:
+        case VT_BOOL:
         case VT_BYTE:
         case VT_SHORT:
         case VT_INT:    return "i32";
@@ -245,9 +246,12 @@ void load(int r, SValue *sv) {
     log("load %d r=%#x v=%#x fc=%d ft=%#x", r, sv->r, v, fc, ft);
 
     if (v == VT_JMP || v == VT_JMPI) {
-        if ((fc & 0xff) - BLOCK_VT_JMP != v - VT_JMP)
-            tcc_error("block doesn't support VT_JMP/I");
+        int k = fc & 0xff;
+        if (k != BLOCK_VT_JMP && k != BLOCK_VT_JMPI)
+            tcc_error("block (%d) doesn't support VT_JMP%s", k, (v == VT_JMP) ? "" : "I");
         gsym(fc);
+        if (k - BLOCK_VT_JMP != v - VT_JMP)
+            printf("i32.eqz\n");
         if (r > 0) printf("set_local $r%d\n", r);
         return;
     }
@@ -296,6 +300,7 @@ void store(int r, SValue *sv) {
 int lookup_return(int t) {
     switch (t & VT_BTYPE) {
         case VT_PTR:
+        case VT_BOOL:
         case VT_BYTE:
         case VT_SHORT:
         case VT_INT:    return REG_IRET;
@@ -305,7 +310,7 @@ int lookup_return(int t) {
         case VT_DOUBLE: return REG_DRET;
         case VT_STRUCT:
         case VT_VOID:   return -1;
-        default: tcc_error("return %s", lookup_type(t));
+        default: tcc_error("return %s (%#x)", lookup_type(t), t);
     }
 }
 
@@ -529,6 +534,8 @@ void gen_cvt(int t) {
     int s = vtop->type.t, r = lookup_return(t);
     char us = (s & VT_UNSIGNED) ? 'u' : 's';
     char ut = (t & VT_UNSIGNED) ? 'u' : 's';
+    s &= VT_BTYPE;
+    t &= VT_BTYPE;
     save_reg(r);
     printf("(set_local $r%d (", r);
     if (s == VT_INT && t == VT_LLONG) {
@@ -544,7 +551,7 @@ void gen_cvt(int t) {
     } else if (!is_float(s) && is_float(t)) {
         printf("%s.convert_%s_%c", lookup_type(t), lookup_type(s), us);
     } else {
-        tcc_error("can't cast %s to %s", lookup_type(s), lookup_type(t));
+        tcc_error("can't cast %s (%#x) to %s (%#x)", lookup_type(s), s, lookup_type(t), t);
     }
     printf(" ");
     gv(RC_INLINE);
@@ -558,17 +565,14 @@ void gen_cvt_itof(int t) { gen_cvt(t); }
 void gen_cvt_ftoi(int t) { gen_cvt(t); }
 void gen_cvt_ftof(int t) { gen_cvt(t); }
 
-/* Save the stack pointer onto the stack and return the location of its address */
 ST_FUNC void gen_vla_sp_save(int addr) {
     tcc_error("variable length arrays unsupported for this target");
 }
 
-/* Restore the SP from a location on the stack */
 ST_FUNC void gen_vla_sp_restore(int addr) {
     tcc_error("variable length arrays unsupported for this target");
 }
 
-/* Subtract from the stack pointer, and push the resulting value onto the stack */
 ST_FUNC void gen_vla_alloc(CType *type, int align) {
     tcc_error("variable length arrays unsupported for this target");
 }
