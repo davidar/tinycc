@@ -153,9 +153,10 @@ const char *lookup_type(int t) {
 }
 
 void wasm_init(void) {
+    FILE *f = fopen("preamble.wat", "r");
     printf("(module\n");
-    printf("(import \"wasi_unstable\" \"fd_write\"");
-    printf(" (func $__wasi_fd_write (param i32 i32 i32 i32) (result i32)))\n");
+    for (int c = getc(f); c != EOF; c = getc(f)) putchar(c);
+    fclose(f);
     printf("(memory (export \"memory\") 2)\n");
     section_reserve(data_section, MAX_ALIGN);
 }
@@ -230,12 +231,14 @@ void gsv(SValue *sv) {
         } else {
             printf("(%s.const %d)", lookup_type(ft), fc);
         }
-    } else if (v == VT_LOCAL) {
+    } else if (v == VT_LOCAL || v == VT_LLOCAL) {
+        if (v == VT_LLOCAL) printf("(i32.load ");
         if (fc >= 0) {
             tcc_error("can't load address of function parameter");
         } else {
             printf("(i32.add (get_global $SP) (i32.const %d))", fc);
         }
+        if (v == VT_LLOCAL) printf(")");
     } else {
         printf("(get_local $r%d)", v);
     }
@@ -260,7 +263,7 @@ void load(int r, SValue *sv) {
     if (v == VT_CMP) {
         printf("(%s.%s (get_local $r%d) (get_local $r%d))",
             lookup_type(tCMP), lookup_op(fc), aCMP, bCMP);
-    } else if (sv->r == (VT_LVAL | VT_LOCAL) && fc >= 0) {
+    } else if ((sv->r & VT_LVAL) && (v == VT_LOCAL) && fc >= 0) {
         printf("(get_local $p%d)", fc);
     } else if (sv->r & VT_LVAL) {
         char s = (ft & VT_UNSIGNED) ? 'u' : 's';
@@ -283,7 +286,7 @@ void store(int r, SValue *sv) {
     int v = sv->r & VT_VALMASK, fc = sv->c.i, ft = sv->type.t;
     log("store %d r=%#x v=%#x fc=%d ft=%#x", r, sv->r, v, fc, ft);
     printf("(");
-    if (sv->r == (VT_LVAL | VT_LOCAL) && fc >= 0) {
+    if ((sv->r & VT_LVAL) && (v == VT_LOCAL) && fc >= 0) {
         printf("set_local $p%d", fc);
     } else {
         switch (ft & VT_BTYPE) {
