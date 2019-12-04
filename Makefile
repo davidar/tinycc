@@ -346,9 +346,27 @@ tar:    tcc-doc.html
 config.mak:
 	$(if $(wildcard $@),,@echo "Please run ./configure." && exit 1)
 
+wasi-libc/sysroot:
+	$(MAKE) -C wasi-libc include_dirs
+
 # run all tests
-test:
-	$(MAKE) -C tests
+test: cross wasi-libc/sysroot
+	./wasm-tcc -Wall -B. \
+		-Iwasi-libc/libc-bottom-half/cloudlibc/src \
+		-Iwasi-libc/libc-bottom-half/cloudlibc/src/include \
+		-Iwasi-libc/libc-bottom-half/headers/private \
+		-Iwasi-libc/sysroot/include \
+		wasi-libc/basics/sources/abort.c \
+		wasi-libc/basics/sources/string.c \
+		wasi-libc/libc-bottom-half/cloudlibc/src/libc/stdlib/_Exit.c \
+		wasi-libc/libc-bottom-half/cloudlibc/src/libc/unistd/write.c \
+		wasi-libc/libc-bottom-half/crt/crt1.c \
+		wasi-libc/libc-bottom-half/sources/__environ.c \
+		wasi-libc/libc-bottom-half/sources/__original_main.c \
+		wasi-libc/libc-bottom-half/sources/string.c \
+		malloc.c \
+		examples/hello.c \
+		| wasmtime /dev/stdin
 # run test(s) from tests2 subdir (see make help)
 tests2.%:
 	$(MAKE) -C tests/tests2 $@

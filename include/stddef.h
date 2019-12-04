@@ -35,6 +35,13 @@ typedef unsigned long long int uint64_t;
 #define offsetof(type, field) ((size_t)&((type *)0)->field)
 
 void *alloca(size_t size);
+void __builtin_trap(void);
+
+/* ignore C11 keywords */
+#define _Alignas(...)
+#define _Noreturn
+#define _Static_assert(...)
+#define _Thread_local
 
 #endif
 

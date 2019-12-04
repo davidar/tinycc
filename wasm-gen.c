@@ -157,6 +157,7 @@ void wasm_init(void) {
     printf("(module\n");
     for (int c = getc(f); c != EOF; c = getc(f)) putchar(c);
     fclose(f);
+    printf("(func $__wasm_call_ctors)\n");
     printf("(memory (export \"memory\") 2)\n");
     section_reserve(data_section, MAX_ALIGN);
 }
@@ -196,7 +197,7 @@ void gglobal(Sym *sym) {
     const char *name = get_tok_str(sym->v, NULL);
     if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
         sym->st_value = ~(nfuncs++);
-        printf("(elem (i32.const %d) $%s)\n", ~(sym->st_value), name);
+        //printf("(elem (i32.const %d) $%s)\n", ~(sym->st_value), name);
     }
     log("gglobal %s = %d", name, sym->st_value);
 }
@@ -587,7 +588,7 @@ void gfunc_epilog(void) {
 }
 
 void wasm_end(void) {
-    int len = data_section->data_offset, sp = (len + (1 << 16)) & ALIGNMENT_MASK;
+    int len = data_section->data_offset, sp = 1 << 16;
     printf("(global (export \"__data_end\") i32 (i32.const %d))\n", len);
     printf("(global (export \"__heap_base\") i32 (i32.const %d))\n", sp);
     printf("(global $SP (export \"__stack_pointer\") (mut i32) (i32.const %d))\n", sp);

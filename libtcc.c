@@ -846,12 +846,12 @@ LIBTCCAPI TCCState *tcc_new(void)
 #endif
 
     /* TinyCC & gcc defines */
-#if PTR_SIZE == 4
+#if PTR_SIZE == 4 && !defined TCC_TARGET_WASM
     /* 32bit systems. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned int");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "int");
     tcc_define_symbol(s, "__ILP32__", NULL);
-#elif LONG_SIZE == 4
+#elif LONG_SIZE == 4 && !defined TCC_TARGET_WASM
     /* 64bit Windows. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long long");
@@ -860,7 +860,9 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* Other 64bit systems. */
     tcc_define_symbol(s, "__SIZE_TYPE__", "unsigned long");
     tcc_define_symbol(s, "__PTRDIFF_TYPE__", "long");
+#ifndef TCC_TARGET_WASM
     tcc_define_symbol(s, "__LP64__", NULL);
+#endif
 #endif
 
 #ifdef TCC_TARGET_PE
