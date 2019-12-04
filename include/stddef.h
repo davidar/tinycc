@@ -34,6 +34,9 @@ typedef unsigned long long int uint64_t;
 
 #define offsetof(type, field) ((size_t)&((type *)0)->field)
 
+#define PSNIP_BUILTIN_EMULATE_NATIVE
+#include "safe-math.h"
+
 void *alloca(size_t size);
 void __builtin_trap(void);
 

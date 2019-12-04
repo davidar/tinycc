@@ -7017,7 +7017,7 @@ static void gen_inline_functions(TCCState *s)
         for (i = 0; i < s->nb_inline_fns; ++i) {
             fn = s->inline_fns[i];
             sym = fn->sym;
-            if (sym && sym->c) {
+            if (sym && sym->st_value) {
                 /* the function was used: generate its code and
                    convert it to a normal function */
                 fn->sym = NULL;
@@ -7177,10 +7177,12 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                    the compilation unit only if they are used */
                 if ((type.t & (VT_INLINE | VT_STATIC)) == 
                     (VT_INLINE | VT_STATIC)) {
+                    BufferedFile *f;
                     struct InlineFunc *fn;
                     const char *filename;
                            
-                    filename = file ? file->filename : "";
+                    for (f = file; f && f->prev; f = f->prev);
+                    filename = f ? f->filename : "";
                     fn = tcc_malloc(sizeof *fn + strlen(filename));
                     strcpy(fn->filename, filename);
                     fn->sym = sym;

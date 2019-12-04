@@ -1,3 +1,6 @@
 [submodule "wasi-libc"]
 	path = wasi-libc
 	url = https://github.com/davidar/wasi-libc.git
+[submodule "portable-snippets"]
+	path = portable-snippets
+	url = https://github.com/nemequ/portable-snippets.git

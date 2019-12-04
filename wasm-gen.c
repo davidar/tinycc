@@ -106,7 +106,46 @@ int nlabels = 0, nfuncs = 0;
 
 /******************************************************/
 
-const char *lookup_op(int op) {
+int native_type(int t) {
+    switch(t & VT_BTYPE) {
+        case VT_PTR:
+        case VT_FUNC:
+        case VT_BOOL:
+        case VT_BYTE:
+        case VT_SHORT:
+        case VT_INT:    return VT_INT;
+        case VT_LLONG:  return VT_LLONG;
+        case VT_FLOAT:  return VT_FLOAT;
+        case VT_LDOUBLE:
+        case VT_DOUBLE: return VT_DOUBLE;
+        case VT_VOID:   return VT_VOID;
+        default: tcc_error("unknown type %#x", t);
+    }
+}
+
+const char *lookup_type(int t) {
+    switch(native_type(t)) {
+        case VT_INT:    return "i32";
+        case VT_LLONG:  return "i64";
+        case VT_FLOAT:  return "f32";
+        case VT_DOUBLE: return "f64";
+    }
+    return 0;
+}
+
+int lookup_return(int t) {
+    if ((t & VT_BTYPE) == VT_STRUCT) t = VT_VOID;
+    switch (native_type(t)) {
+        case VT_INT:    return REG_IRET;
+        case VT_LLONG:  return REG_LRET;
+        case VT_FLOAT:  return REG_FRET;
+        case VT_DOUBLE: return REG_DRET;
+        case VT_VOID:   return -1;
+    }
+    return 0;
+}
+
+const char *lookup_op(int op, int t) {
     if (op == TOK_PDIV) op = '/';
     switch(op) {
         case '+': return "add";
@@ -124,31 +163,15 @@ const char *lookup_op(int op) {
         case TOK_UMOD: return "rem_u";
         case TOK_EQ: return "eq";
         case TOK_NE: return "ne";
-        case TOK_LT: return "lt_s";
-        case TOK_LE: return "le_s";
-        case TOK_GT: return "gt_s";
-        case TOK_GE: return "ge_s";
+        case TOK_LT: return is_float(t) ? "lt" : "lt_s";
+        case TOK_LE: return is_float(t) ? "le" : "le_s";
+        case TOK_GT: return is_float(t) ? "gt" : "gt_s";
+        case TOK_GE: return is_float(t) ? "ge" : "ge_s";
         case TOK_ULT: return "lt_u";
         case TOK_ULE: return "le_u";
         case TOK_UGT: return "gt_u";
         case TOK_UGE: return "ge_u";
         default: tcc_error("unknown op %#x", op);
-    }
-}
-
-const char *lookup_type(int t) {
-    switch(t & VT_BTYPE) {
-        case VT_PTR:
-        case VT_FUNC:
-        case VT_BOOL:
-        case VT_BYTE:
-        case VT_SHORT:
-        case VT_INT:    return "i32";
-        case VT_LLONG:  return "i64";
-        case VT_FLOAT:  return "f32";
-        case VT_LDOUBLE:
-        case VT_DOUBLE: return "f64";
-        default: tcc_error("unknown type %#x", t);
     }
 }
 
@@ -195,10 +218,6 @@ void gfunc_sig(Sym *return_sym, int decl) {
 
 void gglobal(Sym *sym) {
     const char *name = get_tok_str(sym->v, NULL);
-    if ((sym->type.t & VT_BTYPE) == VT_FUNC) {
-        sym->st_value = ~(nfuncs++);
-        //printf("(elem (i32.const %d) $%s)\n", ~(sym->st_value), name);
-    }
     log("gglobal %s = %d", name, sym->st_value);
 }
 
@@ -211,8 +230,14 @@ void gdata(Sym *sym, int offset) {
 
 void gfunc_prolog(CType *func_type) {
     loc = nlabels = 0;
-    log("gfunc_prolog %s func_ind=%d", funcname, func_ind);
-    printf("(func $%s (export \"%s\") ", funcname, funcname);
+    log("gfunc_prolog %s func_type=%#x", funcname, func_type->t);
+    if (func_type->t & VT_STATIC) {
+        BufferedFile *f;
+        for (f = file; f->prev; f = f->prev);
+        printf("(func $%s/%s ", f->filename, funcname);
+    } else {
+        printf("(func $%s (export \"%s\") ", funcname, funcname);
+    }
     gfunc_sig(func_type->ref, 1);
     printf("\n");
     for (int i = 1; i < NB_REGS; i++)
@@ -263,7 +288,7 @@ void load(int r, SValue *sv) {
     if (r > 0) printf("(set_local $r%d ", r);
     if (v == VT_CMP) {
         printf("(%s.%s (get_local $r%d) (get_local $r%d))",
-            lookup_type(tCMP), lookup_op(fc), aCMP, bCMP);
+            lookup_type(tCMP), lookup_op(fc, tCMP), aCMP, bCMP);
     } else if ((sv->r & VT_LVAL) && (v == VT_LOCAL) && fc >= 0) {
         printf("(get_local $p%d)", fc);
     } else if (sv->r & VT_LVAL) {
@@ -299,23 +324,6 @@ void store(int r, SValue *sv) {
         gsv(sv);
     }
     printf(" (get_local $r%d))\n", r);
-}
-
-int lookup_return(int t) {
-    switch (t & VT_BTYPE) {
-        case VT_PTR:
-        case VT_BOOL:
-        case VT_BYTE:
-        case VT_SHORT:
-        case VT_INT:    return REG_IRET;
-        case VT_LLONG:  return REG_LRET;
-        case VT_FLOAT:  return REG_FRET;
-        case VT_LDOUBLE:
-        case VT_DOUBLE: return REG_DRET;
-        case VT_STRUCT:
-        case VT_VOID:   return -1;
-        default: tcc_error("return %s (%#x)", lookup_type(t), t);
-    }
 }
 
 void gfunc_call(int nb_args) {
@@ -378,7 +386,14 @@ void gfunc_call(int nb_args) {
         printf("(get_local $r%d))", r);
     } else {
         const char* name = get_tok_str(vtop->sym->v, NULL);
-        printf("(call $%s)", name);
+        if (vtop->type.t & VT_STATIC) {
+            BufferedFile *f;
+            for (f = file; f->prev; f = f->prev);
+            printf("(call $%s/%s)", f->filename, name);
+            if (!vtop->sym->st_value) vtop->sym->st_value = ~(nfuncs++);
+        } else {
+            printf("(call $%s)", name);
+        }
     }
     if (lookup_return(t) > 0) printf(")");
     printf("\n");
@@ -511,7 +526,7 @@ void gen_opx(int op) {
         vtop->c.i = op;
     } else {
         printf("(set_local $r%d (%s.%s (get_local $r%d) (get_local $r%d)))\n",
-            r, lookup_type(t), lookup_op(op), r, fr);
+            r, lookup_type(t), lookup_op(op, t), r, fr);
     }
 }
 
@@ -538,28 +553,32 @@ void gen_cvt(int t) {
     int s = vtop->type.t, r = lookup_return(t);
     char us = (s & VT_UNSIGNED) ? 'u' : 's';
     char ut = (t & VT_UNSIGNED) ? 'u' : 's';
-    s &= VT_BTYPE;
-    t &= VT_BTYPE;
+    s = native_type(s);
+    t = native_type(t);
     save_reg(r);
-    printf("(set_local $r%d (", r);
-    if (s == VT_INT && t == VT_LLONG) {
-        printf("i64.extend_i32_%c", us);
-    } else if (s == VT_LLONG && t == VT_INT) {
-        printf("i32.wrap_i64");
-    } else if (s == VT_FLOAT && t == VT_DOUBLE) {
-        printf("f64.promote_f32");
-    } else if (s == VT_DOUBLE && t == VT_FLOAT) {
-        printf("f32.demote_f64");
-    } else if (is_float(s) && !is_float(t)) {
-        printf("%s.trunc_%s_%c", lookup_type(t), lookup_type(s), ut);
-    } else if (!is_float(s) && is_float(t)) {
-        printf("%s.convert_%s_%c", lookup_type(t), lookup_type(s), us);
-    } else {
-        tcc_error("can't cast %s (%#x) to %s (%#x)", lookup_type(s), s, lookup_type(t), t);
+    printf("(set_local $r%d ", r);
+    if (s != t) {
+        printf("(");
+        if (s == VT_INT && t == VT_LLONG) {
+            printf("i64.extend_i32_%c", us);
+        } else if (s == VT_LLONG && t == VT_INT) {
+            printf("i32.wrap_i64");
+        } else if (s == VT_FLOAT && t == VT_DOUBLE) {
+            printf("f64.promote_f32");
+        } else if (s == VT_DOUBLE && t == VT_FLOAT) {
+            printf("f32.demote_f64");
+        } else if (is_float(s) && !is_float(t)) {
+            printf("%s.trunc_%s_%c", lookup_type(t), lookup_type(s), ut);
+        } else if (!is_float(s) && is_float(t)) {
+            printf("%s.convert_%s_%c", lookup_type(t), lookup_type(s), us);
+        } else {
+            tcc_error("can't cast %s (%#x) to %s (%#x)", lookup_type(s), s, lookup_type(t), t);
+        }
+        printf(" ");
     }
-    printf(" ");
     gv(RC_INLINE);
-    printf("))\n");
+    if (s != t) printf(")");
+    printf(")\n");
     vtop->r = r;
     vtop->type.t = t;
 }
