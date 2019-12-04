@@ -357,15 +357,16 @@ test: cross wasi-libc/sysroot
 		-Iwasi-libc/libc-bottom-half/headers/private \
 		-Iwasi-libc/sysroot/include \
 		wasi-libc/basics/sources/abort.c \
+		wasi-libc/basics/sources/reallocarray.c \
 		wasi-libc/basics/sources/string.c \
-		wasi-libc/libc-bottom-half/cloudlibc/src/libc/stdlib/_Exit.c \
-		wasi-libc/libc-bottom-half/cloudlibc/src/libc/unistd/write.c \
+		wasi-libc/libc-bottom-half/cloudlibc/src/libc/*/*.c \
+		wasi-libc/libc-bottom-half/cloudlibc/src/libc/*/*/*.c \
 		wasi-libc/libc-bottom-half/crt/crt1.c \
-		wasi-libc/libc-bottom-half/sources/__environ.c \
-		wasi-libc/libc-bottom-half/sources/__original_main.c \
-		wasi-libc/libc-bottom-half/sources/string.c \
+		wasi-libc/libc-bottom-half/libpreopen/libpreopen.c \
+		wasi-libc/libc-bottom-half/sources/*.c \
 		malloc.c \
 		examples/hello.c \
+		| tee test.wat \
 		| wasmtime /dev/stdin
 # run test(s) from tests2 subdir (see make help)
 tests2.%:

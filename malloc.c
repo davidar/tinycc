@@ -11,4 +11,8 @@ void *calloc(size_t nmemb, size_t size) {
     return malloc(nmemb * size);
 }
 
+void *realloc(void *ptr, size_t size) {
+    abort();
+}
+
 void free(void *ptr) {}

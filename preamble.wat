@@ -45,5 +45,6 @@
 (func $__wasi_sock_shutdown (import "wasi_unstable" "sock_shutdown") (param i32 i32) (result i32))
 
 (func $__builtin_trap unreachable)
+(func $__builtin_unreachable unreachable)
 (func $__builtin_wasm_memory_size (result i32) memory.size)
 (func $__builtin_wasm_memory_grow (param $p i32) (result i32) (memory.grow (get_local $p)))

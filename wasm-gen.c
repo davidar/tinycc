@@ -102,7 +102,7 @@ const int reg_types[NB_REGS] = {
 }
 
 int aCMP, bCMP, tCMP;
-int nlabels = 0, nfuncs = 0;
+int nblocks = 0, nlabels = 0, nfuncs = 0;
 
 /******************************************************/
 
@@ -229,7 +229,7 @@ void gdata(Sym *sym, int offset) {
 }
 
 void gfunc_prolog(CType *func_type) {
-    loc = nlabels = 0;
+    loc = nblocks = nlabels = 0;
     log("gfunc_prolog %s func_type=%#x", funcname, func_type->t);
     if (func_type->t & VT_STATIC) {
         BufferedFile *f;
@@ -408,9 +408,8 @@ ST_FUNC int gfunc_sret(CType *vt, int variadic, CType *ret, int *ret_align, int 
 }
 
 ST_FUNC int gblock(int t) {
-    static int num_blocks = 0;
     int k = t & 0xff, i = t >> 8;
-    if (!i) i = ++num_blocks;
+    if (!i) i = ++nblocks;
     if (k == BLOCK_IF) {
         printf("if $B%d\n", i);
     } else if (k == BLOCK_SWITCH) {

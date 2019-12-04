@@ -1317,6 +1317,10 @@ ST_FUNC int gv(int rc)
             rc2 = RC_QRET;
 #endif
 #endif
+#ifdef TCC_TARGET_WASM
+        if (rc == RC_IRET && (vtop->type.t & VT_BTYPE) == VT_LLONG)
+            rc = RC_LRET;
+#endif
         /* need to reload if:
            - constant
            - lvalue (need to dereference pointer)
