@@ -1318,8 +1318,10 @@ ST_FUNC int gv(int rc)
 #endif
 #endif
 #ifdef TCC_TARGET_WASM
-        if (rc == RC_IRET && (vtop->type.t & VT_BTYPE) == VT_LLONG)
-            rc = RC_LRET;
+        if ((vtop->type.t & VT_BTYPE) == VT_LLONG) {
+            if (rc == RC_IRET) rc = RC_LRET;
+            if (rc == RC_INT) rc = RC_LLONG;
+        }
 #endif
         /* need to reload if:
            - constant
@@ -1655,8 +1657,7 @@ static void gen_opl(int op)
         vrott(3);
         gfunc_call(2);
         vpushi(0);
-        vtop->r = reg_iret;
-        vtop->r2 = reg_lret;
+        vtop->r = reg_lret;
         break;
     case '^':
     case '&':
@@ -2407,8 +2408,7 @@ static void gen_cvt_ftoi1(int t)
         vrott(2);
         gfunc_call(1);
         vpushi(0);
-        vtop->r = REG_IRET;
-        vtop->r2 = REG_LRET;
+        vtop->r = REG_LRET;
     } else {
         gen_cvt_ftoi(t);
     }
@@ -5236,15 +5236,15 @@ ST_FUNC void unary(void)
                       ret.r2 = REG_QRET;
 #endif
                 } else {
+                    ret.r = REG_IRET;
 #ifndef TCC_TARGET_ARM64
 #ifdef TCC_TARGET_X86_64
                     if ((ret.type.t & VT_BTYPE) == VT_QLONG)
 #else
                     if ((ret.type.t & VT_BTYPE) == VT_LLONG)
 #endif
-                        ret.r2 = REG_LRET;
+                        ret.r = REG_LRET;
 #endif
-                    ret.r = REG_IRET;
                 }
                 ret.c.i = 0;
             }

@@ -450,6 +450,7 @@ void gsym(int t) {
     } else if (k == BLOCK_IF_ELSE) {
         printf("else $B%d\n", i);
     } else if (k == BLOCK_SWITCH) {
+        printf("drop\n");
         printf("end $S%d\n", i);
     } else if (k == BLOCK_SWITCH_CASE) {
         printf("end $C%d\n", i);
