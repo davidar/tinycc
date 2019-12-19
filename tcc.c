@@ -318,7 +318,7 @@ redo:
 
     /* compile or add each files or library */
 #ifdef TCC_TARGET_WASM
-    wasm_init();
+    if (s->output_type != TCC_OUTPUT_PREPROCESS) wasm_init();
 #endif
     for (first_file = NULL, ret = 0;;) {
         struct filespec *f = s->files[s->nb_files - n];
@@ -342,7 +342,7 @@ redo:
             break;
     }
 #ifdef TCC_TARGET_WASM
-    wasm_end();
+    if (s->output_type != TCC_OUTPUT_PREPROCESS) wasm_end();
 #endif
 
     if (s->run_test) {

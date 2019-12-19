@@ -5998,6 +5998,11 @@ static void block(int *bsym, int *csym, int is_expr)
         skip(';');
         if (tok != ')') {
             skip_or_save_block(&iter_str);
+            while (tok == ',') {
+                tok_str_add_tok(iter_str);
+                skip(',');
+                skip_or_save_block(&iter_str);
+            }
         }
         skip(')');
 	saved_nocode_wanted = nocode_wanted;
@@ -6160,7 +6165,7 @@ static void skip_or_save_block(TokenString **str)
 {
     int braces = tok == '{';
     int level = 0;
-    if (str)
+    if (str && *str == NULL)
       *str = tok_str_alloc();
 
     while ((level > 0 || (tok != '}' && tok != ',' && tok != ';' && tok != ')'))) {
@@ -7186,10 +7191,11 @@ static int decl0(int l, int is_for_loop_init, Sym *func_sym)
                     const char *filename;
                            
                     for (f = file; f && f->prev; f = f->prev);
-                    filename = f ? f->filename : "";
+                    filename = f ? f->true_filename : "";
                     fn = tcc_malloc(sizeof *fn + strlen(filename));
                     strcpy(fn->filename, filename);
                     fn->sym = sym;
+                    fn->func_str = NULL;
 		    skip_or_save_block(&fn->func_str);
                     dynarray_add(&tcc_state->inline_fns,
 				 &tcc_state->nb_inline_fns, fn);

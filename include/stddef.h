@@ -40,12 +40,6 @@ typedef unsigned long long int uint64_t;
 void *alloca(size_t size);
 void __builtin_trap(void);
 
-/* ignore C11 keywords */
-#define _Alignas(...)
-#define _Noreturn
-#define _Static_assert(...)
-#define _Thread_local
-
 #endif
 
 /* Older glibc require a wint_t from <stddef.h> (when requested

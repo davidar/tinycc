@@ -899,6 +899,13 @@ LIBTCCAPI TCCState *tcc_new(void)
     /* Some GCC builtins that are simple to express as macros.  */
     tcc_define_symbol(s, "__builtin_extract_return_addr(x)", "x");
 #endif /* ndef TCC_TARGET_PE */
+
+    /* ignore C11 keywords */
+    tcc_define_symbol(s, "_Alignas(...)", "");
+    tcc_define_symbol(s, "_Noreturn", "");
+    tcc_define_symbol(s, "_Static_assert(...)", "");
+    tcc_define_symbol(s, "static_assert", "_Static_assert");
+    tcc_define_symbol(s, "_Thread_local", "");
     return s;
 }
 

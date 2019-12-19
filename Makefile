@@ -135,7 +135,7 @@ DEF-arm-vfp     = -DTCC_TARGET_ARM -DTCC_ARM_VFP
 DEF-arm-eabi    = -DTCC_TARGET_ARM -DTCC_ARM_VFP -DTCC_ARM_EABI
 DEF-arm-eabihf  = -DTCC_TARGET_ARM -DTCC_ARM_VFP -DTCC_ARM_EABI -DTCC_ARM_HARDFLOAT
 DEF-arm         = $(DEF-arm-eabihf)
-DEF-wasm        = -DTCC_TARGET_WASM
+DEF-wasm        = -DTCC_TARGET_WASM -DTCC_MUSL
 DEF-$(NATIVE_TARGET) = $(NATIVE_DEFINES)
 
 DEFINES += $(DEF-$T) $(DEF-all)
@@ -351,19 +351,17 @@ wasi-libc/sysroot:
 
 # run all tests
 test: cross wasi-libc/sysroot
+	$(MAKE) -C wasi-libc libc WASM_CC=../wasm-tcc WASM_CFLAGS=-B.. WASM_AR=echo
 	./wasm-tcc -Wall -B. \
-		-Iwasi-libc/libc-bottom-half/cloudlibc/src \
-		-Iwasi-libc/libc-bottom-half/cloudlibc/src/include \
-		-Iwasi-libc/libc-bottom-half/headers/private \
-		-Iwasi-libc/sysroot/include \
-		wasi-libc/basics/sources/abort.c \
-		wasi-libc/basics/sources/reallocarray.c \
-		wasi-libc/basics/sources/string.c \
-		wasi-libc/libc-bottom-half/cloudlibc/src/libc/*/*.c \
-		wasi-libc/libc-bottom-half/cloudlibc/src/libc/*/*/*.c \
-		wasi-libc/libc-bottom-half/crt/crt1.c \
-		wasi-libc/libc-bottom-half/libpreopen/libpreopen.c \
-		wasi-libc/libc-bottom-half/sources/*.c \
+		-isystem wasi-libc/sysroot/include \
+		wasi-libc/build/basics/sources/abort.c \
+		wasi-libc/build/basics/sources/reallocarray.c \
+		wasi-libc/build/basics/sources/string.c \
+		wasi-libc/build/libc-bottom-half/cloudlibc/src/libc/*/*.c \
+		wasi-libc/build/libc-bottom-half/cloudlibc/src/libc/*/*/*.c \
+		wasi-libc/build/libc-bottom-half/crt/crt1.c \
+		wasi-libc/build/libc-bottom-half/libpreopen/libpreopen.c \
+		wasi-libc/build/libc-bottom-half/sources/*.c \
 		malloc.c \
 		examples/hello.c \
 		| tee test.wat \

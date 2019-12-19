@@ -234,7 +234,7 @@ void gfunc_prolog(CType *func_type) {
     if (func_type->t & VT_STATIC) {
         BufferedFile *f;
         for (f = file; f->prev; f = f->prev);
-        printf("(func $%s/%s ", f->filename, funcname);
+        printf("(func $%s/%s ", f->true_filename, funcname);
     } else {
         printf("(func $%s (export \"%s\") ", funcname, funcname);
     }
@@ -389,7 +389,7 @@ void gfunc_call(int nb_args) {
         if (vtop->type.t & VT_STATIC) {
             BufferedFile *f;
             for (f = file; f->prev; f = f->prev);
-            printf("(call $%s/%s)", f->filename, name);
+            printf("(call $%s/%s)", f->true_filename, name);
             if (!vtop->sym->st_value) vtop->sym->st_value = ~(nfuncs++);
         } else {
             printf("(call $%s)", name);
