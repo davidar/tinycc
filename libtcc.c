@@ -985,7 +985,7 @@ LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
     if (!s->nostdlib && output_type != TCC_OUTPUT_OBJ)
         tcc_add_systemdir(s);
 # endif
-#else
+#elif 0
     /* paths for crt objects */
     tcc_split_path(s, &s->crt_paths, &s->nb_crt_paths, CONFIG_TCC_CRTPREFIX);
     /* add libc crt1/crti objects */

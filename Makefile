@@ -349,10 +349,15 @@ config.mak:
 wasi-libc/sysroot:
 	$(MAKE) -C wasi-libc include_dirs
 
+wasmtime:
+	curl https://wasmtime.dev/install.sh -sSf | bash
+	ln -sv $(HOME)/.wasmtime/bin/wasmtime .
+
 # run all tests
-test: cross wasi-libc/sysroot
-	$(MAKE) -C wasi-libc libc WASM_CC=../wasm-tcc WASM_CFLAGS=-B.. WASM_AR=echo
+test: cross wasi-libc/sysroot wasmtime
+	$(MAKE) -C wasi-libc libc WASM_CC=../wasm-tcc WASM_CFLAGS="-B.. -isystem ../portable-snippets/safe-math" WASM_AR=echo
 	./wasm-tcc -Wall -B. \
+		-isystem portable-snippets/safe-math \
 		-isystem wasi-libc/sysroot/include \
 		wasi-libc/build/basics/sources/abort.c \
 		wasi-libc/build/basics/sources/reallocarray.c \
@@ -365,7 +370,7 @@ test: cross wasi-libc/sysroot
 		malloc.c \
 		examples/hello.c \
 		| tee test.wat \
-		| wasmtime /dev/stdin
+		| ./wasmtime /dev/stdin
 # run test(s) from tests2 subdir (see make help)
 tests2.%:
 	$(MAKE) -C tests/tests2 $@
