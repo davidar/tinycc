@@ -243,7 +243,7 @@ void gfunc_prolog(CType *func_type) {
     for (int i = 1; i < NB_REGS; i++)
         printf("(local $r%d %s) ", i, lookup_type(reg_types[i]));
     printf("(local $goto i32) (local $exe_label i32)\n");
-    printf("(set_local $exe_label (i32.const 0))\n");
+    printf("(local.set $exe_label (i32.const 0))\n");
 }
 
 void gsv(SValue *sv) {
@@ -262,11 +262,11 @@ void gsv(SValue *sv) {
         if (fc >= 0) {
             tcc_error("can't load address of function parameter");
         } else {
-            printf("(i32.add (get_global $SP) (i32.const %d))", fc);
+            printf("(i32.add (global.get $SP) (i32.const %d))", fc);
         }
         if (v == VT_LLOCAL) printf(")");
     } else {
-        printf("(get_local $r%d)", v);
+        printf("(local.get $r%d)", v);
     }
 }
 
@@ -281,16 +281,16 @@ void load(int r, SValue *sv) {
         gsym(fc);
         if (k - BLOCK_VT_JMP != v - VT_JMP)
             printf("i32.eqz\n");
-        if (r > 0) printf("set_local $r%d\n", r);
+        if (r > 0) printf("local.set $r%d\n", r);
         return;
     }
 
-    if (r > 0) printf("(set_local $r%d ", r);
+    if (r > 0) printf("(local.set $r%d ", r);
     if (v == VT_CMP) {
-        printf("(%s.%s (get_local $r%d) (get_local $r%d))",
+        printf("(%s.%s (local.get $r%d) (local.get $r%d))",
             lookup_type(tCMP), lookup_op(fc, tCMP), aCMP, bCMP);
     } else if ((sv->r & VT_LVAL) && (v == VT_LOCAL) && fc >= 0) {
-        printf("(get_local $p%d)", fc);
+        printf("(local.get $p%d)", fc);
     } else if (sv->r & VT_LVAL) {
         char s = (ft & VT_UNSIGNED) ? 'u' : 's';
         printf("(");
@@ -313,7 +313,7 @@ void store(int r, SValue *sv) {
     log("store %d r=%#x v=%#x fc=%d ft=%#x", r, sv->r, v, fc, ft);
     printf("(");
     if ((sv->r & VT_LVAL) && (v == VT_LOCAL) && fc >= 0) {
-        printf("set_local $p%d", fc);
+        printf("local.set $p%d", fc);
     } else {
         switch (ft & VT_BTYPE) {
             case VT_BYTE: printf("i32.store8"); break;
@@ -323,7 +323,7 @@ void store(int r, SValue *sv) {
         printf(" ");
         gsv(sv);
     }
-    printf(" (get_local $r%d))\n", r);
+    printf(" (local.get $r%d))\n", r);
 }
 
 void gfunc_call(int nb_args) {
@@ -375,15 +375,15 @@ void gfunc_call(int nb_args) {
     }
 
     if (indirect) r = gv(RC_INT);
-    printf("(set_global $SP (i32.add (get_global $SP) (i32.const %d)))\n",
+    printf("(global.set $SP (i32.add (global.get $SP) (i32.const %d)))\n",
         loc & ALIGNMENT_MASK);
-    if (lookup_return(t) > 0) printf("(set_local $r%d ", lookup_return(t));
+    if (lookup_return(t) > 0) printf("(local.set $r%d ", lookup_return(t));
     if (indirect) {
         if (return_sym->f.func_type != FUNC_NEW)
             tcc_error("unsupported function prototype for indirect call");
         printf("(call_indirect ");
         gfunc_sig(return_sym, 0);
-        printf("(get_local $r%d))", r);
+        printf("(local.get $r%d))", r);
     } else {
         const char* name = get_tok_str(vtop->sym->v, NULL);
         if (vtop->type.t & VT_STATIC) {
@@ -397,7 +397,7 @@ void gfunc_call(int nb_args) {
     }
     if (lookup_return(t) > 0) printf(")");
     printf("\n");
-    printf("(set_global $SP (i32.sub (get_global $SP) (i32.const %d)))\n",
+    printf("(global.set $SP (i32.sub (global.get $SP) (i32.const %d)))\n",
         loc & ALIGNMENT_MASK);
     vtop--;
 }
@@ -417,15 +417,15 @@ ST_FUNC int gblock(int t) {
         printf("i32.const 0\n");
     } else if (k == BLOCK_SWITCH_CASE) {
         int r = gv(RC_INT);
-        printf("get_local $r%d\n", r);
+        printf("local.get $r%d\n", r);
         printf("i32.or\n");
-        printf("tee_local $r%d\n", r);
-        printf("get_local $r%d\n", r);
+        printf("local.tee $r%d\n", r);
+        printf("local.get $r%d\n", r);
         printf("if $C%d\n", i);
         vtop--;
     } else if (k == BLOCK_GOTO) {
-        printf("(tee_local $exe_label (i32.or (get_local $exe_label) "
-            "(i32.eq (get_local $goto) (i32.const %d))))\n", i);
+        printf("(local.tee $exe_label (i32.or (local.get $exe_label) "
+            "(i32.eq (local.get $goto) (i32.const %d))))\n", i);
         printf("if $G%d\n", i);
     } else {
         printf("block $B%d", i);
@@ -469,7 +469,7 @@ int gjmp(int t) {
     int k = t & 0xff, i = t >> 8;
     if (k == BLOCK_RETURN) {
         int r = lookup_return(func_vt.t);
-        if (r >= 0) printf("get_local $r%d\n", r);
+        if (r >= 0) printf("local.get $r%d\n", r);
         printf("return\n");
     } else if (i == 0) {
         tcc_error("gjmp(0)");
@@ -480,7 +480,7 @@ int gjmp(int t) {
     } else if (k == BLOCK_LOOP_CONTINUE) {
         printf("br $L%d\n", i);
     } else if (k == BLOCK_GOTO) {
-        printf("(set_local $goto (i32.const %d))\n", i);
+        printf("(local.set $goto (i32.const %d))\n", i);
         gjmp(rsym);
     } else {
         printf("br $B%d\n", i);
@@ -505,7 +505,7 @@ int gtst(int inv, int t) {
                 t = gblock(t);
                 i = t >> 8;
             }
-            printf("(br_if $B%d (get_local $r%d))\n", i, r);
+            printf("(br_if $B%d (local.get $r%d))\n", i, r);
         }
     } else {
         tcc_error("gtst");
@@ -525,7 +525,7 @@ void gen_opx(int op) {
         vtop->r = VT_CMP;
         vtop->c.i = op;
     } else {
-        printf("(set_local $r%d (%s.%s (get_local $r%d) (get_local $r%d)))\n",
+        printf("(local.set $r%d (%s.%s (local.get $r%d) (local.get $r%d)))\n",
             r, lookup_type(t), lookup_op(op, t), r, fr);
     }
 }
@@ -556,7 +556,7 @@ void gen_cvt(int t) {
     s = native_type(s);
     t = native_type(t);
     save_reg(r);
-    printf("(set_local $r%d ", r);
+    printf("(local.set $r%d ", r);
     if (s != t) {
         printf("(");
         if (s == VT_INT && t == VT_LLONG) {
@@ -602,7 +602,7 @@ ST_FUNC void gen_vla_alloc(CType *type, int align) {
 
 void gfunc_epilog(void) {
     int r = lookup_return(func_vt.t);
-    if (r >= 0) printf("get_local $r%d\n", r);
+    if (r >= 0) printf("local.get $r%d\n", r);
     printf(")\n\n");
 }
 
@@ -615,7 +615,7 @@ void wasm_end(void) {
     for (int i = 0; i < len; i++)
         printf("\\%02x", data_section->data[i]);
     printf("\")\n");
-    printf("(table (export \"__indirect_function_table\") %d anyfunc)\n", nfuncs);
+    printf("(table (export \"__indirect_function_table\") %d funcref)\n", nfuncs);
     printf(")\n");
     exit(0);
 }

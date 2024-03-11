@@ -47,4 +47,4 @@
 (func $__builtin_trap unreachable)
 (func $__builtin_unreachable unreachable)
 (func $__builtin_wasm_memory_size (param i32) (result i32) memory.size)
-(func $__builtin_wasm_memory_grow (param i32) (param $p i32) (result i32) (memory.grow (get_local $p)))
+(func $__builtin_wasm_memory_grow (param i32) (param $p i32) (result i32) (memory.grow (local.get $p)))
