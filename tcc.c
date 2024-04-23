@@ -291,6 +291,8 @@ redo:
     if (opt < 0)
         return 1;
 
+    s->static_link = 1;
+
     if (n == 0) {
         if (opt == OPT_HELP) {
             fputs(help, stdout);
@@ -374,6 +376,12 @@ redo:
         }
         done = ret || ++n >= s->nb_files;
     } while (!done && (s->output_type != TCC_OUTPUT_OBJ || s->option_r));
+
+    while (s->new_undef_sym) {
+        s->new_undef_sym = 0;
+        ld_add_file(s, "/usr/local/musl/lib/libc.a");
+        ld_add_file(s, "/usr/local/lib/tcc/libtcc1.a");
+    }
 
     if (s->do_bench)
         end_time = getclock_ms();
