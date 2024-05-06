@@ -358,6 +358,10 @@ redo:
             --n;
     }
 
+#ifdef TCC_TARGET_WASM
+    wasm_init();
+#endif
+
     /* compile or add each files or library */
     first_file = NULL;
     do {
@@ -374,6 +378,11 @@ redo:
         }
         done = ret || ++n >= s->nb_files;
     } while (!done && (s->output_type != TCC_OUTPUT_OBJ || s->option_r));
+
+#ifdef TCC_TARGET_WASM
+    wasm_end(s1);
+    exit(0);
+#endif
 
     if (s->do_bench)
         end_time = getclock_ms();

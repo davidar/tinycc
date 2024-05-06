@@ -111,6 +111,7 @@ NATIVE_DEFINES_$(CONFIG_arm_eabi) += -DTCC_ARM_EABI
 NATIVE_DEFINES_$(CONFIG_arm_vfp) += -DTCC_ARM_VFP
 NATIVE_DEFINES_$(CONFIG_arm64) += -DTCC_TARGET_ARM64
 NATIVE_DEFINES_$(CONFIG_riscv64) += -DTCC_TARGET_RISCV64
+NATIVE_DEFINES_$(CONFIG_wasm) += -DTCC_TARGET_WASM
 NATIVE_DEFINES_$(CONFIG_BSD) += -DTARGETOS_$(TARGETOS)
 NATIVE_DEFINES_$(CONFIG_Android) += -DTARGETOS_ANDROID
 NATIVE_DEFINES_$(CONFIG_pie) += -DCONFIG_TCC_PIE
@@ -146,6 +147,7 @@ DEF-c67            = -DTCC_TARGET_C67 -w # disable warnigs
 DEF-x86_64-FreeBSD = $(DEF-x86_64) -DTARGETOS_FreeBSD
 DEF-x86_64-NetBSD  = $(DEF-x86_64) -DTARGETOS_NetBSD
 DEF-x86_64-OpenBSD = $(DEF-x86_64) -DTARGETOS_OpenBSD
+DEF-wasm           = -DTCC_TARGET_WASM
 
 DEF-$(NATIVE_TARGET) = $(NATIVE_DEFINES)
 
@@ -157,15 +159,16 @@ PROGS = tcc$(EXESUF)
 TCCLIBS = $(LIBTCCDEF) $(LIBTCC) $(LIBTCC1)
 TCCDOCS = tcc.1 tcc-doc.html tcc-doc.info
 
-all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
+#all: $(PROGS) $(TCCLIBS) $(TCCDOCS)
 
 # cross compiler targets to build
-TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
-TCC_X += riscv64 arm64-osx
+# TCC_X = i386 x86_64 i386-win32 x86_64-win32 x86_64-osx arm arm64 arm-wince c67
+# TCC_X += riscv64 arm64-osx
 # TCC_X += arm-fpa arm-fpa-ld arm-vfp arm-eabi
+TCC_X = wasm
 
 # cross libtcc1.a targets to build
-LIBTCC1_X = $(filter-out c67,$(TCC_X))
+# LIBTCC1_X = $(filter-out c67,$(TCC_X))
 
 PROGS_CROSS = $(foreach X,$(TCC_X),$X-tcc$(EXESUF))
 LIBTCC1_CROSS = $(foreach X,$(LIBTCC1_X),$X-libtcc1.a)
@@ -241,6 +244,7 @@ arm64_FILES = $(CORE_FILES) arm64-gen.c arm64-link.c arm64-asm.c
 arm64-osx_FILES = $(arm64_FILES) tccmacho.c
 c67_FILES = $(CORE_FILES) c67-gen.c c67-link.c tcccoff.c
 riscv64_FILES = $(CORE_FILES) riscv64-gen.c riscv64-link.c riscv64-asm.c
+wasm_FILES = $(CORE_FILES) wasm-gen.c wasm-link.c
 
 TCCDEFS_H$(subst yes,,$(CONFIG_predefs)) = tccdefs_.h
 
@@ -269,7 +273,7 @@ DEF_GITHASH:= -DTCC_GITHASH="\"$(GITHASH)$(GITMODF)\""
 endif
 
 ifeq ($(CONFIG_debug),yes)
-CFLAGS += -g
+CFLAGS += -g -O0
 LDFLAGS += -g
 endif
 

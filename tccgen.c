@@ -163,6 +163,7 @@ static void end_switch(void);
 /* Automagical code suppression */
 
 /* Clear 'nocode_wanted' at forward label if it was used */
+/*
 ST_FUNC void gsym(int t)
 {
   if (t) {
@@ -170,6 +171,7 @@ ST_FUNC void gsym(int t)
     CODE_ON();
   }
 }
+*/
 
 /* Clear 'nocode_wanted' if current pc is a label */
 static int gind()
@@ -1468,7 +1470,8 @@ ST_FUNC int get_reg(int rc)
         }
     }
     /* Should never comes here */
-    return -1;
+    tcc_error_noabort("no register left");
+    abort();
 }
 
 /* find a free temporary local variable (return the offset on stack) match the size and align. If none, add new temporary stack variable*/

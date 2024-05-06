@@ -1717,7 +1717,7 @@ ST_FUNC void tccelf_add_crtbegin(TCCState *s1)
         tcc_add_crt(s1, "crtbegin_so.o");
     else
         tcc_add_crt(s1, "crtbegin_dynamic.o");
-#else
+#elif 0
     if (s1->output_type != TCC_OUTPUT_DLL)
         tcc_add_crt(s1, "crt1.o");
     tcc_add_crt(s1, "crti.o");
